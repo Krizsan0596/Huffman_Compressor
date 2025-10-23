@@ -1,0 +1,4 @@
+/.nvim_build_cache
+/bin
+*.odt
+*.pdf
