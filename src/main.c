@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include "../lib/file.h"
-#include "../debugmalloc.h"
+#include "../lib/debugmalloc.h"
 
 int main(int argc, char* argv[]){
     // for (int i = 0; i < argc; i++){
