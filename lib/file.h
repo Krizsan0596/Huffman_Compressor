@@ -6,7 +6,7 @@
 
 int read_raw(char file_name[], char* data);
 int write_raw(char file_name[], char* data, long file_size, bool overwrite);
-int read_compressed(char file_name[], long out_size, char *out_file, char *huffman_tree, char *compressed_data);
+int read_compressed(char file_name[], compressed_file *compressed);
 int write_compressed(compressed_file *compressed, bool overwrite); 
 long get_file_size(FILE* f);
 
