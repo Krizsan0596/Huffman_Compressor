@@ -18,6 +18,7 @@ typedef enum {
 
 typedef struct Node {
     node_type type;
+    long frequency;
     union {
         char data;
         struct {
