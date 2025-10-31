@@ -24,11 +24,11 @@ void test_file_io() {
     int write_result = write_compressed(&original_data, true);
     assert(write_result == 0);
 
+    // 3. Verification
     compressed_file read_data;
     int read_result = read_compressed("test.huf", &read_data);
     assert(read_result == 0);
 
-    // 3. Assertion
     assert(original_data.original_size == read_data.original_size);
     assert(strcmp(original_data.original_file, read_data.original_file) == 0);
     assert(original_data.tree_size == read_data.tree_size);
@@ -41,7 +41,6 @@ void test_file_io() {
     free(original_data.huffman_tree);
     free(original_data.compressed_data);
     free(original_data.file_name);
-
     free(read_data.original_file);
     free(read_data.huffman_tree);
     free(read_data.compressed_data);

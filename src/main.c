@@ -1,5 +1,8 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "../lib/file.h"
+#include "../lib/compress.h"
+#include "../lib/data_types.h"
 #include "../lib/debugmalloc.h"
 
 int main(int argc, char* argv[]){
@@ -9,19 +12,24 @@ int main(int argc, char* argv[]){
     //     else printf("Invalid");
     // }
     char *data;
-    int res = read_raw("test.txt", data);
-    long *frequencies = malloc(256 * sizeof(long));
-    if (res == 1) {
-        printf("File not found.");
-        return 1;
+    int res = read_raw("test.txt", &data);
+    long *frequencies = calloc(256, sizeof(long));
+    int leaf_count = 0;
+    for (int i = 0; i < 256; i++) {
+        if (frequencies[i] != 0) leaf_count++;
     }
-    else if (res == 2){
-        printf("Reading file failed");
-        return 1;
+    Node **nodes = malloc((2 * leaf_count - 1) * sizeof(Node*));
+    int j = 0;
+    for (int i = 0; i < 256; i++) {
+        if (frequencies[i] != 0) {
+            Node *leaf = malloc(sizeof(Node));
+            *leaf = construct_leaf(frequencies[i], (char) i);
+            nodes[j] = leaf;
+            j++;
+        }
     }
-    printf("%s", data);
-    for (int i = 0; i < 256; i++){
-        printf("\n%ld", frequencies[i]);
-    }
+    sort_nodes(nodes, leaf_count);
+    Node *root_node = construct_tree(nodes, leaf_count);
+
     return 0;
 }

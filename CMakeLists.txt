@@ -9,13 +9,14 @@ enable_testing()
 add_executable(${PROJECT_NAME}
     src/main.c
     lib/file.c
+    lib/compress.c
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE lib)
 target_link_libraries(${PROJECT_NAME} PRIVATE m)
 
 # Unit test for file I/O
-add_executable(file_io_test tests/test_file_io.c lib/file.c)
+add_executable(file_io_test tests/test_file_io.c lib/file.c lib/compress.c)
 target_include_directories(file_io_test PRIVATE lib)
 target_link_libraries(file_io_test m)
 add_test(NAME FileIOTest COMMAND file_io_test)
