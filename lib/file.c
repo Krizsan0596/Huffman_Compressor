@@ -52,67 +52,78 @@ int write_raw(char *file_name, char *data, long file_size, bool overwrite){
 }
 int read_compressed(char file_name[], compressed_file *compressed){
     int ret = 0;
+    char *data = NULL;
     FILE* f = fopen(file_name, "rb");
     if (f == NULL) {
         return 1; // File open error
     }
 
-    // Initialize pointers to NULL for safe cleanup
     compressed->original_file = NULL;
     compressed->huffman_tree = NULL;
     compressed->compressed_data = NULL;
     compressed->file_name = NULL;
 
+    long file_size = get_file_size(f);
+    if (file_size < 0) {
+        fclose(f);
+        return 1;
+    }
+
+    data = malloc(file_size);
+    if (data == NULL) {
+        fclose(f);
+        return -1; // Malloc error
+    }
+
+    if (fread(data, 1, file_size, f) != file_size) {
+        free(data);
+        fclose(f);
+        return 2; // File read error
+    }
+    
+    fclose(f);
+
+    char *current = data;
     long name_len = 0;
-    long compressed_bytes = 0;
 
-    // The following blocks execute sequentially. If any step fails, `ret` is set, and subsequent blocks are skipped.
+    while (true) {
+        memcpy(&compressed->original_size, current, sizeof(long));
+        current += sizeof(long);
 
-    // Step 1: Read original_size
-    if (ret == 0 && fread(&compressed->original_size, sizeof(long), 1, f) != 1) ret = 2;
+        memcpy(&name_len, current, sizeof(long));
+        current += sizeof(long);
 
-    // Step 2: Read name_len
-    if (ret == 0 && fread(&name_len, sizeof(long), 1, f) != 1) ret = 2;
-
-    // Step 3: Allocate and read original_file
-    if (ret == 0) {
         compressed->original_file = (char*)malloc(name_len + 1);
-        if (compressed->original_file == NULL) {
-            ret = -1; // Malloc error
-        } else {
-            if (fread(compressed->original_file, 1, name_len, f) != name_len) ret = 2;
-            else compressed->original_file[name_len] = '\0';
-        }
-    }
+        if (compressed->original_file == NULL) { ret = -1; break; }
+        memcpy(compressed->original_file, current, name_len);
+        compressed->original_file[name_len] = '\0';
+        current += name_len;
 
-    // Step 4: Read tree_size
-    if (ret == 0 && fread(&compressed->tree_size, sizeof(long), 1, f) != 1) ret = 2;
+        memcpy(&compressed->tree_size, current, sizeof(long));
+        current += sizeof(long);
 
-    // Step 5: Allocate and read huffman_tree
-    if (ret == 0) {
         compressed->huffman_tree = (char*)malloc(compressed->tree_size);
-        if (compressed->huffman_tree == NULL) ret = -1;
-        else if (fread(compressed->huffman_tree, 1, compressed->tree_size, f) != compressed->tree_size) ret = 2;
-    }
+        if (compressed->huffman_tree == NULL) { ret = -1; break; }
+        memcpy(compressed->huffman_tree, current, compressed->tree_size);
+        current += compressed->tree_size;
 
-    // Step 6: Read data_size
-    if (ret == 0 && fread(&compressed->data_size, sizeof(long), 1, f) != 1) ret = 2;
+        memcpy(&compressed->data_size, current, sizeof(long));
+        current += sizeof(long);
 
-    // Step 7: Allocate and read compressed_data
-    if (ret == 0) {
-        compressed_bytes = (long)ceil((double)compressed->data_size / 8.0);
+        long compressed_bytes = (long)ceil((double)compressed->data_size / 8.0);
         compressed->compressed_data = (char*)malloc(compressed_bytes);
-        if (compressed->compressed_data == NULL) ret = -1;
-        else if (fread(compressed->compressed_data, 1, compressed_bytes, f) != compressed_bytes) ret = 2;
-    }
+        if (compressed->compressed_data == NULL) { ret = -1; break; }
+        memcpy(compressed->compressed_data, current, compressed_bytes);
+        current += compressed_bytes;
 
-    // Step 8: Duplicate file_name string
-    if (ret == 0) {
         compressed->file_name = strdup(file_name);
-        if (compressed->file_name == NULL) ret = -1;
+        if (compressed->file_name == NULL) { ret = -1; break; }
+
+        break;
     }
 
-    // Centralized cleanup: if an error occurred, free all allocated memory.
+    free(data);
+
     if (ret != 0) {
         free(compressed->original_file);
         free(compressed->huffman_tree);
@@ -124,7 +135,6 @@ int read_compressed(char file_name[], compressed_file *compressed){
         compressed->file_name = NULL;
     }
 
-    fclose(f);
     return ret;
 }
 int write_compressed(compressed_file *compressed, bool overwrite) {
