@@ -23,7 +23,7 @@ int read_raw(char file_name[], char** data){
     if (f == NULL) return 1; // Not exists.
     long file_size = get_file_size(f);
     *data = (char*)malloc(file_size);
-    size_t read_size = fread(data, sizeof(char), file_size/sizeof(char), f);
+    size_t read_size = fread(*data, sizeof(char), file_size/sizeof(char), f);
     fclose(f);
     if (read_size != file_size) return 2;
     return 0;

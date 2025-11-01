@@ -22,8 +22,8 @@ typedef struct Node {
     union {
         char data;
         struct {
-            struct Node *left;
-            struct Node *right;
+            int left;
+            int right;
         };
     };
 } Node;
