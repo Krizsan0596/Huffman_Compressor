@@ -149,7 +149,7 @@ int compress(char *original_data, long data_len, Node *nodes, Node *root_node, c
             if (bit_count == 8) {
                 compressed_file->compressed_data[total_bits / 8] = buffer;
                 total_bits += 8;
-                buffer &= 0;
+                buffer = 0;
                 bit_count = 0;
             }
         }
