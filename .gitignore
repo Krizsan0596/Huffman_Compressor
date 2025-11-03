@@ -2,3 +2,13 @@
 /bin
 *.odt
 *.pdf
+cmake_install.cmake
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+Makefile
+build/
+Testing/
+file_io_test
+compress_test
+huffman

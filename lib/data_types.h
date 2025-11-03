@@ -1,15 +1,7 @@
 #ifndef DATA_TYPES_H
 #define DATA_TYPES_H
 
-typedef struct{
-    char *file_name;
-    long original_size;
-    char *original_file;
-    char *huffman_tree;
-    long tree_size; 
-    char *compressed_data;
-    long data_size; // In bits.
-} compressed_file;
+static const char magic[4] = {'H', 'U', 'F', 'F'};
 
 typedef enum {
     LEAF,
@@ -18,13 +10,25 @@ typedef enum {
 
 typedef struct Node {
     node_type type;
+    long frequency;
     union {
         char data;
         struct {
-            struct Node *left;
-            struct Node *right;
+            int left;
+            int right;
         };
     };
 } Node;
+
+typedef struct{
+    char magic[4];
+    char *file_name;
+    long original_size;
+    char *original_file;
+    Node *huffman_tree;
+    long tree_size; 
+    char *compressed_data;
+    long data_size; // In bits.
+} Compressed_file;
 
 #endif
