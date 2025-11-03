@@ -8,8 +8,9 @@ Node* construct_tree(Node *nodes, long leaf_count);
 Node construct_leaf(long frequency, char data);
 Node construct_branch(Node *nodes, int left_index, int right_index);
 void sort_nodes(Node *nodes, int len);
-
-int compress(char *data, Node *root_node);
+char* check_cache(char leaf, char **cache);
+char* find_leaf(char leaf, Node *nodes, Node *root_node);
+int compress(char *original_data, long data_len, Node *nodes, Node *root_node, char** cache, Compressed_file *compressed_file);
 int decompress(char *data, Node *root_node);
 
 #endif

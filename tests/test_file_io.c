@@ -8,7 +8,7 @@
 
 void test_file_io() {
     // 1. Setup
-    compressed_file original_data;
+    Compressed_file original_data;
     original_data.original_size = 123;
     original_data.original_file = strdup("test.txt");
     original_data.tree_size = 45;
@@ -25,7 +25,7 @@ void test_file_io() {
     assert(write_result == 0);
 
     // 3. Verification
-    compressed_file read_data;
+    Compressed_file read_data;
     int read_result = read_compressed("test.huf", &read_data);
     assert(read_result == 0);
 

@@ -1,5 +1,7 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "../lib/file.h"
 #include "../lib/compress.h"
 #include "../lib/data_types.h"
@@ -47,27 +49,59 @@ int main(int argc, char* argv[]){
     }
 
     int j = 0;
-    for (int i = 0; i < 256; i++) {
+    for (int i = 0; i < leaf_count; i++) {
         if (frequencies[i] != 0) {
             nodes[j] = construct_leaf(frequencies[i], (char) i);
             j++;
         }
     }
+    free(frequencies);
 
     sort_nodes(nodes, leaf_count);
     Node *root_node = construct_tree(nodes, leaf_count);
 
+    long tree_size;
     if (root_node != NULL) {
-        long tree_size = (root_node - nodes) + 1;
-        Node *resized_nodes = realloc(nodes, tree_size * sizeof(Node));
-        if (resized_nodes != NULL) {
-            nodes = resized_nodes;
+        tree_size = (root_node - nodes) + 1;
+        Node *temp = realloc(nodes, tree_size * sizeof(Node));
+        if (temp != NULL) {
+            nodes = temp;
         }
     }
+    else {
+        return 2; //tree error
+    }
+    char **cache = calloc(256, sizeof(char*));
+    if (cache == NULL) {
+        free(data);
+        free(nodes);
+        return 1; // malloc error
+    }
+ 
+    Compressed_file *compressed_file = malloc(sizeof(Compressed_file));
+    if (compressed_file == NULL) {
+        free(data);
+        free(nodes);
+        free(cache);
+        return 1; // malloc error
+    }
 
+    if (compress(data, data_len, nodes, root_node, cache, compressed_file) != 0) {
+        fprintf(stderr, "Compression failed.\n");
+        // Free resources
+        free(data);
+        free(nodes);
+        for(int i=0; i<256; ++i) free(cache[i]);
+        free(cache);
+        free(compressed_file->compressed_data);
+        free(compressed_file);
+        return 1;
+    }
 
+    // Cleanup cache
+    for(int i=0; i<256; ++i) free(cache[i]);
+    free(cache);
     free(data);
-    free(frequencies);
     free(nodes);
 
     return 0;

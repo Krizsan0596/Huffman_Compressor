@@ -9,6 +9,8 @@
 #include <string.h>
 #include <stdbool.h>
 
+
+
 long get_file_size(FILE *f){
     long current = ftell(f);
     if (fseek(f, 0, SEEK_END) != 0) return -1;
@@ -20,13 +22,17 @@ long get_file_size(FILE *f){
 int read_raw(char file_name[], char** data){
     FILE* f;
     f = fopen(file_name, "rb");
-    if (f == NULL) return 1; // Not exists.
+    if (f == NULL) return -1; // Not exists.
     long file_size = get_file_size(f);
     *data = (char*)malloc(file_size);
+    if (*data == NULL) {
+        fclose(f);
+        return -3; // Allocation failure
+    }
     size_t read_size = fread(*data, sizeof(char), file_size/sizeof(char), f);
     fclose(f);
-    if (read_size != file_size) return 2;
-    return 0;
+    if (read_size != file_size) return -2;
+    return read_size;
 }
 
 int write_raw(char *file_name, char *data, long file_size, bool overwrite){
@@ -50,9 +56,8 @@ int write_raw(char *file_name, char *data, long file_size, bool overwrite){
     if (file_size != written_size) return 2;
     return 0;
 }
-int read_compressed(char file_name[], compressed_file *compressed){
+int read_compressed(char file_name[], Compressed_file *compressed){
     int ret = 0;
-    char *data = NULL;
     FILE* f = fopen(file_name, "rb");
     if (f == NULL) {
         return 1; // File open error
@@ -63,66 +68,92 @@ int read_compressed(char file_name[], compressed_file *compressed){
     compressed->compressed_data = NULL;
     compressed->file_name = NULL;
 
-    long file_size = get_file_size(f);
-    if (file_size < 0) {
-        fclose(f);
-        return 1;
-    }
-
-    data = malloc(file_size);
-    if (data == NULL) {
-        fclose(f);
-        return -1; // Malloc error
-    }
-
-    if (fread(data, 1, file_size, f) != file_size) {
-        free(data);
-        fclose(f);
-        return 2; // File read error
-    }
-    
-    fclose(f);
-
-    char *current = data;
-    long name_len = 0;
-
     while (true) {
-        memcpy(&compressed->original_size, current, sizeof(long));
-        current += sizeof(long);
+        if (fread(compressed->magic, sizeof(char), sizeof(magic), f) != sizeof(magic)) {
+            ret = 2; // File read error
+            break;
+        }
 
-        memcpy(&name_len, current, sizeof(long));
-        current += sizeof(long);
+        if (memcmp(compressed->magic, magic, sizeof(magic)) != 0) {
+            ret = 3; // Magic header mismatch
+            break;
+        }
+
+        if (fread(&compressed->original_size, sizeof(long), 1, f) != 1) {
+            ret = 2;
+            break;
+        }
+
+        long name_len = 0;
+        if (fread(&name_len, sizeof(long), 1, f) != 1) {
+            ret = 2;
+            break;
+        }
+        if (name_len < 0) {
+            ret = 3;
+            break;
+        }
 
         compressed->original_file = (char*)malloc(name_len + 1);
-        if (compressed->original_file == NULL) { ret = -1; break; }
-        memcpy(compressed->original_file, current, name_len);
+        if (compressed->original_file == NULL) {
+            ret = -1; // Malloc error
+            break;
+        }
+        if ((long)fread(compressed->original_file, sizeof(char), name_len, f) != name_len) {
+            ret = 2;
+            break;
+        }
         compressed->original_file[name_len] = '\0';
-        current += name_len;
 
-        memcpy(&compressed->tree_size, current, sizeof(long));
-        current += sizeof(long);
+        if (fread(&compressed->tree_size, sizeof(long), 1, f) != 1) {
+            ret = 2;
+            break;
+        }
+        if (compressed->tree_size < 0) {
+            ret = 3;
+            break;
+        }
 
-        compressed->huffman_tree = (char*)malloc(compressed->tree_size);
-        if (compressed->huffman_tree == NULL) { ret = -1; break; }
-        memcpy(compressed->huffman_tree, current, compressed->tree_size);
-        current += compressed->tree_size;
+        compressed->huffman_tree = (Node*)malloc(compressed->tree_size);
+        if (compressed->huffman_tree == NULL) {
+            ret = -1;
+            break;
+        }
+        if ((long)fread(compressed->huffman_tree, sizeof(char), compressed->tree_size, f) != compressed->tree_size) {
+            ret = 2;
+            break;
+        }
 
-        memcpy(&compressed->data_size, current, sizeof(long));
-        current += sizeof(long);
+        if (fread(&compressed->data_size, sizeof(long), 1, f) != 1) {
+            ret = 2;
+            break;
+        }
+        if (compressed->data_size < 0) {
+            ret = 3;
+            break;
+        }
 
         long compressed_bytes = (long)ceil((double)compressed->data_size / 8.0);
         compressed->compressed_data = (char*)malloc(compressed_bytes);
-        if (compressed->compressed_data == NULL) { ret = -1; break; }
-        memcpy(compressed->compressed_data, current, compressed_bytes);
-        current += compressed_bytes;
+        if (compressed->compressed_data == NULL) {
+            ret = -1;
+            break;
+        }
+        if ((long)fread(compressed->compressed_data, sizeof(char), compressed_bytes, f) != compressed_bytes) {
+            ret = 2;
+            break;
+        }
 
         compressed->file_name = strdup(file_name);
-        if (compressed->file_name == NULL) { ret = -1; break; }
+        if (compressed->file_name == NULL) {
+            ret = -1;
+            break;
+        }
 
         break;
     }
 
-    free(data);
+    fclose(f);
 
     if (ret != 0) {
         free(compressed->original_file);
@@ -137,11 +168,15 @@ int read_compressed(char file_name[], compressed_file *compressed){
 
     return ret;
 }
-int write_compressed(compressed_file *compressed, bool overwrite) {
+int write_compressed(Compressed_file *compressed, bool overwrite) {
     long name_len = strlen(compressed->original_file);
-    long file_size = sizeof(long) + sizeof(long) + name_len * sizeof(char) + sizeof(long) + compressed->tree_size + sizeof(long) + ceil((float)compressed->data_size/8);
+    long file_size = (sizeof(char) * 4) + sizeof(long) + sizeof(long) + name_len * sizeof(char) + sizeof(long) + compressed->tree_size + sizeof(long) + ceil((float)compressed->data_size/8);
     char *data = malloc(file_size);
     char *current = &data[0];
+    for (int i = 0; i < 4; i++) {
+        data[i] = magic[i];
+    }
+    current += 4;
     memcpy(current, &compressed->original_size, sizeof(long));
     current += sizeof(long);
     memcpy(current, &name_len, sizeof(long));
