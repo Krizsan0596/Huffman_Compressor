@@ -108,7 +108,7 @@ int main(int argc, char* argv[]){
     }
 
     for(int i=0; i<256; ++i) {
-        if (cache[i] != NULL && cache[i] != 0) {
+        if (cache[i] != NULL) {
             free(cache[i]);
         }
     }
