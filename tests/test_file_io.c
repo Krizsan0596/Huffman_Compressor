@@ -5,6 +5,7 @@
 #include <math.h>
 #include "../lib/file.h"
 #include "../lib/data_types.h"
+#include "../lib/debugmalloc.h"
 
 void test_file_io() {
     // 1. Setup

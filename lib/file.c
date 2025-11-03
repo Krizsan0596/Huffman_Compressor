@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include "debugmalloc.h"
 
 
 
@@ -29,9 +30,12 @@ int read_raw(char file_name[], char** data){
         fclose(f);
         return -3; // Allocation failure
     }
-    size_t read_size = fread(*data, sizeof(char), file_size/sizeof(char), f);
+    size_t read_size = fread(*data, sizeof(char), file_size, f);
     fclose(f);
-    if (read_size != file_size) return -2;
+    if (read_size != file_size) {
+        free(*data);
+        return -2;
+    }
     return read_size;
 }
 
@@ -51,6 +55,9 @@ int write_raw(char *file_name, char *data, long file_size, bool overwrite){
     f = fopen(file_name, "wb");
     if (f == NULL) return 1;
     fwrite(data, sizeof(char), file_size, f);
+    fclose(f);
+    f = fopen(file_name, "rb");
+    if (f == NULL) return 1;
     long written_size = get_file_size(f);
     fclose(f);
     if (file_size != written_size) return 2;

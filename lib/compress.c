@@ -4,6 +4,7 @@
 #include <math.h>
 #include "compress.h"
 #include "data_types.h"
+#include "debugmalloc.h"
 
 static int compare_nodes(const void *a, const void *b) {
     long freq_a = ((Node*)a)->frequency;
@@ -102,8 +103,9 @@ char* find_leaf(char leaf, Node *nodes, Node *root_node) {
             strcpy(path, "1");
             strcat(path, res);
             free(res);
+            return path;
         }
-        return path;
+        return NULL;
     }
 }
 
@@ -117,6 +119,7 @@ int compress(char *original_data, long data_len, Node *nodes, Node *root_node, c
 
     compressed_file->compressed_data = malloc(data_len * sizeof(char));
     if (compressed_file->compressed_data == NULL) {
+        compressed_file->data_size = 0;
         return -1; // Malloc error
     }
 
@@ -132,6 +135,8 @@ int compress(char *original_data, long data_len, Node *nodes, Node *root_node, c
                 cache[(unsigned char)original_data[i]] = path;
             } else {
                 free(compressed_file->compressed_data);
+                compressed_file->compressed_data = NULL;
+                compressed_file->data_size = 0;
                 return -2; // tree error
             }
         }
@@ -164,4 +169,3 @@ int compress(char *original_data, long data_len, Node *nodes, Node *root_node, c
 
     return 0;
 }
-

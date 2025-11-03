@@ -1,4 +1,3 @@
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,7 +48,7 @@ int main(int argc, char* argv[]){
     }
 
     int j = 0;
-    for (int i = 0; i < leaf_count; i++) {
+    for (int i = 0; i < 256; i++) {
         if (frequencies[i] != 0) {
             nodes[j] = construct_leaf(frequencies[i], (char) i);
             j++;
@@ -63,10 +62,6 @@ int main(int argc, char* argv[]){
     long tree_size;
     if (root_node != NULL) {
         tree_size = (root_node - nodes) + 1;
-        Node *temp = realloc(nodes, tree_size * sizeof(Node));
-        if (temp != NULL) {
-            nodes = temp;
-        }
     }
     else {
         return 2; //tree error
@@ -93,16 +88,33 @@ int main(int argc, char* argv[]){
         free(nodes);
         for(int i=0; i<256; ++i) free(cache[i]);
         free(cache);
-        free(compressed_file->compressed_data);
+        if (compressed_file->compressed_data != NULL) {
+            free(compressed_file->compressed_data);
+        }
         free(compressed_file);
         return 1;
     }
 
-    // Cleanup cache
-    for(int i=0; i<256; ++i) free(cache[i]);
+    compressed_file->huffman_tree = nodes;
+    compressed_file->tree_size = tree_size * sizeof(Node);
+    compressed_file->original_file = "test.txt";
+    compressed_file->original_size = data_len;
+    compressed_file->file_name = "test.huff";
+    write_compressed(compressed_file, false);
+
+    free(nodes);
+    if (compressed_file->compressed_data != NULL) {
+        free(compressed_file->compressed_data);
+    }
+
+    for(int i=0; i<256; ++i) {
+        if (cache[i] != NULL && cache[i] != 0) {
+            free(cache[i]);
+        }
+    }
     free(cache);
     free(data);
-    free(nodes);
+    free(compressed_file);
 
     return 0;
 }
