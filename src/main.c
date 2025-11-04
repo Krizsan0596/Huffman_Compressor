@@ -3,15 +3,16 @@
 #include <string.h>
 #include "../lib/file.h"
 #include "../lib/compress.h"
+#include "../lib/decompress.h"
 #include "../lib/data_types.h"
 #include "../lib/debugmalloc.h"
 
 int main(int argc, char* argv[]){
-    for (int i = 0; i < argc; i++){
-        if (strcmp(argv[i], "-x") == 0) printf("Extract");
-        else if (strcmp(argv[i], "-h") == 0) printf("Usage");
-        else printf("Invalid");
-    }
+    // for (int i = 0; i < argc; i++){
+    //     if (strcmp(argv[i], "-x") == 0) printf("Extract");
+    //     else if (strcmp(argv[i], "-h") == 0) printf("Usage");
+    //     else printf("Invalid");
+    // }
     char *data;
     int data_len = read_raw("test.txt", &data);
     if (data_len < 0) {
@@ -83,7 +84,6 @@ int main(int argc, char* argv[]){
 
     if (compress(data, data_len, nodes, root_node, cache, compressed_file) != 0) {
         fprintf(stderr, "Compression failed.\n");
-        // Free resources
         free(data);
         free(nodes);
         for(int i=0; i<256; ++i) free(cache[i]);
@@ -115,6 +115,19 @@ int main(int argc, char* argv[]){
     free(cache);
     free(data);
     free(compressed_file);
-
+    
+    // decompression
+    remove("test.txt");
+    compressed_file = calloc(1, sizeof(Compressed_file));
+    read_compressed("test.huff", compressed_file);
+    char *raw_data = malloc(compressed_file->original_size * sizeof(char));
+    decompress(compressed_file, raw_data);
+    write_raw(compressed_file->original_file, raw_data, compressed_file->original_size, false);
+    free(raw_data);
+    free(compressed_file->file_name);
+    free(compressed_file->original_file);
+    free(compressed_file->huffman_tree);
+    free(compressed_file->compressed_data);
+    free(compressed_file);
     return 0;
 }

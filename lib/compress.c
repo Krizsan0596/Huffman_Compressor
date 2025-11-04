@@ -28,7 +28,7 @@ int count_frequencies(char *data, long data_len, long *frequencies) {
 
 
 Node construct_leaf(long frequency, char data) {
-    Node leaf;
+    Node leaf = {0};
     leaf.type = LEAF;
     leaf.frequency = frequency;
     leaf.data = data;
@@ -36,7 +36,7 @@ Node construct_leaf(long frequency, char data) {
 }
 
 Node construct_branch(Node *nodes, int left_index, int right_index) {
-    Node branch;
+    Node branch = {0};
     branch.type = BRANCH;
     branch.left = left_index;
     branch.right = right_index;
