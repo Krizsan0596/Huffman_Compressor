@@ -11,6 +11,6 @@ void sort_nodes(Node *nodes, int len);
 char* check_cache(char leaf, char **cache);
 char* find_leaf(char leaf, Node *nodes, Node *root_node);
 int compress(char *original_data, long data_len, Node *nodes, Node *root_node, char** cache, Compressed_file *compressed_file);
-int decompress(char *data, Node *root_node);
+
 
 #endif

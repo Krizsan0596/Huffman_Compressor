@@ -28,7 +28,7 @@ int read_raw(char file_name[], char** data){
     *data = (char*)malloc(file_size);
     if (*data == NULL) {
         fclose(f);
-        return -3; // Allocation failure
+        return -3; // malloc error
     }
     size_t read_size = fread(*data, sizeof(char), file_size, f);
     fclose(f);
@@ -42,12 +42,12 @@ int read_raw(char file_name[], char** data){
 int write_raw(char *file_name, char *data, long file_size, bool overwrite){
     FILE* f;
     f = fopen(file_name, "r");
-    if (f != NULL) { // Check if file exists
+    if (f != NULL) { 
         if (!overwrite) {
             fclose(f);
             printf("Letezik a fajl (%s). Felulirjam? [I/n]>", file_name);
             char input;
-            if (scanf(" %c", &input) != 1) return 4; // Error reading user input
+            if (scanf(" %c", &input) != 1) return 4; 
             if (tolower(input) != 'y') return 3;
         }
         else fclose(f);
@@ -67,7 +67,7 @@ int read_compressed(char file_name[], Compressed_file *compressed){
     int ret = 0;
     FILE* f = fopen(file_name, "rb");
     if (f == NULL) {
-        return 1; // File open error
+        return 1; 
     }
 
     compressed->original_file = NULL;
@@ -82,7 +82,7 @@ int read_compressed(char file_name[], Compressed_file *compressed){
         }
 
         if (memcmp(compressed->magic, magic, sizeof(magic)) != 0) {
-            ret = 3; // Magic header mismatch
+            ret = 3; // Magic error
             break;
         }
 
@@ -141,7 +141,7 @@ int read_compressed(char file_name[], Compressed_file *compressed){
         }
 
         long compressed_bytes = (long)ceil((double)compressed->data_size / 8.0);
-        compressed->compressed_data = (char*)malloc(compressed_bytes);
+        compressed->compressed_data = (char*)malloc(compressed_bytes * sizeof(char));
         if (compressed->compressed_data == NULL) {
             ret = -1;
             break;
