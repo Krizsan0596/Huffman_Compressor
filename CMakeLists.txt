@@ -25,3 +25,8 @@ add_executable(compress_test tests/test_compress.c lib/compress.c)
 target_include_directories(compress_test PRIVATE lib)
 target_link_libraries(compress_test m)
 add_test(NAME CompressTest COMMAND compress_test)
+
+add_executable(test_compress_decompress tests/test_compress_decompress.c lib/compress.c lib/decompress.c)
+target_include_directories(test_compress_decompress PRIVATE lib)
+target_link_libraries(test_compress_decompress m)
+add_test(NAME CompressDecompressTest COMMAND test_compress_decompress)
