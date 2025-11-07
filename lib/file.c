@@ -48,7 +48,7 @@ int write_raw(char *file_name, char *data, long file_size, bool overwrite){
             printf("Letezik a fajl (%s). Felulirjam? [I/n]>", file_name);
             char input;
             if (scanf(" %c", &input) != 1) return 4; 
-            if (tolower(input) != 'y') return 3;
+            if (tolower(input) != 'i') return 3;
         }
         else fclose(f);
     }

@@ -119,10 +119,59 @@ int main(int argc, char* argv[]){
     // decompression
     remove("test.txt");
     compressed_file = calloc(1, sizeof(Compressed_file));
-    read_compressed("test.huff", compressed_file);
+    if (compressed_file == NULL) {
+        fprintf(stderr, "Failed to allocate memory for compressed_file\n");
+        return 1;
+    }
+    if (compressed_file == NULL) {
+        fprintf(stderr, "Failed to allocate memory for compressed_file\n");
+        return 1;
+    }
+    if (read_compressed("test.huff", compressed_file) != 0) {
+        fprintf(stderr, "Failed to read compressed file\n");
+        free(compressed_file);
+        return 1;
+    }
+    if (compressed_file->original_size <= 0) {
+        fprintf(stderr, "Invalid original size in compressed file\n");
+        free(compressed_file->file_name);
+        free(compressed_file->original_file);
+        free(compressed_file->huffman_tree);
+        free(compressed_file->compressed_data);
+        free(compressed_file);
+        return 1;
+    }
     char *raw_data = malloc(compressed_file->original_size * sizeof(char));
-    decompress(compressed_file, raw_data);
-    write_raw(compressed_file->original_file, raw_data, compressed_file->original_size, false);
+    if (raw_data == NULL) {
+        fprintf(stderr, "Failed to allocate memory for raw_data\n");
+        free(compressed_file->file_name);
+        free(compressed_file->original_file);
+        free(compressed_file->huffman_tree);
+        free(compressed_file->compressed_data);
+        free(compressed_file);
+        return 1;
+    }
+    int decompress_result = decompress(compressed_file, raw_data);
+    if (decompress_result != 0) {
+        fprintf(stderr, "Decompression failed (error code: %d)\n", decompress_result);
+        free(raw_data);
+        free(compressed_file->file_name);
+        free(compressed_file->original_file);
+        free(compressed_file->huffman_tree);
+        free(compressed_file->compressed_data);
+        free(compressed_file);
+        return 1;
+    }
+    if (write_raw(compressed_file->original_file, raw_data, compressed_file->original_size, false) < 0) {
+        fprintf(stderr, "Failed to write decompressed file '%s'\n", compressed_file->original_file);
+        free(raw_data);
+        free(compressed_file->file_name);
+        free(compressed_file->original_file);
+        free(compressed_file->huffman_tree);
+        free(compressed_file->compressed_data);
+        free(compressed_file);
+        return 1;
+    }
     free(raw_data);
     free(compressed_file->file_name);
     free(compressed_file->original_file);
