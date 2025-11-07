@@ -38,19 +38,46 @@ int main() {
         tree_size = (root_node - nodes) + 1;
     }
     else {
+        free(nodes);
         return 2; //tree error
     }
 
     char **cache = calloc(256, sizeof(char*));
 
     Compressed_file *compressed_file = malloc(sizeof(Compressed_file));
-    compress(data, data_len, nodes, root_node, cache, compressed_file);
+    int compress_result = compress(data, data_len, nodes, root_node, cache, compressed_file);
+    if (compress_result != 0) {
+        printf("Compression failed with error code %d!\n", compress_result);
+        free(nodes);
+        for(int i=0; i<256; ++i) {
+            if (cache[i] != NULL) {
+                free(cache[i]);
+            }
+        }
+        free(cache);
+        free(compressed_file);
+        return 3;
+    }
 
     compressed_file->huffman_tree = nodes;
     compressed_file->tree_size = tree_size * sizeof(Node);
 
     char *raw_data = malloc(data_len * sizeof(char));
-    decompress(compressed_file, raw_data);
+    int decompress_result = decompress(compressed_file, raw_data);
+    if (decompress_result != 0) {
+        printf("Decompression failed with error code %d!\n", decompress_result);
+        free(nodes);
+        for(int i=0; i<256; ++i) {
+            if (cache[i] != NULL) {
+                free(cache[i]);
+            }
+        }
+        free(cache);
+        free(compressed_file->compressed_data);
+        free(compressed_file);
+        free(raw_data);
+        return 4;
+    }
 
     if (memcmp(data, raw_data, data_len) != 0) {
         printf("Decompression failed!\n");
