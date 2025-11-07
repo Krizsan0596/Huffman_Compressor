@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include "../lib/file.h"
 #include "../lib/compress.h"
@@ -7,16 +8,65 @@
 #include "../lib/data_types.h"
 #include "../lib/debugmalloc.h"
 
+static void print_usage(const char *prog_name) {
+    const char *usage =
+        "Huffman kodolo\n"
+        "Hasznalat: %s -c|-x [-o KIMENETI_FAJL] BEMENETI_FAJL\n"
+        "\n"
+        "Opciok:\n"
+        "\t-c                Tomorites\n"
+        "\t-x                Kitomorites\n"
+        "\t-o KIMENETI_FAJL  Kimeneti fajl megadasa (tomoriteskor, opcionalis).\n"
+        "\t-h                Kiirja ezt az utmutatot.\n"
+        "\t-f                Ha letezik a KIMENETI_FAJL, kerdes nelkul felulirja."
+        "BEMENETI_FAJL: A tomoritendo vagy visszaallitando fajl utvonala.\n"
+        "\tA -c es -x kapcsolok kizarjak egymast.";
+
+    printf(usage, prog_name);
+}
+
 int main(int argc, char* argv[]){
-    // for (int i = 0; i < argc; i++){
-    //     if (strcmp(argv[i], "-x") == 0) printf("Extract");
-    //     else if (strcmp(argv[i], "-h") == 0) printf("Usage");
-    //     else printf("Invalid");
-    // }
+    bool compress_mode = false;
+    bool extract_mode = false;
+    bool force = false;
+    char *input_file;
+    char *output_file;
+    for (int i = 1; i < argc; i++){
+        if (strcmp(argv[i], "-h") == 0) {
+            print_usage(argv[0]);
+            return 0;
+        }
+        if (strcmp(argv[i], "-c") == 0) compress_mode = true;
+        else if (strcmp(argv[i], "-x") == 0) extract_mode = true;
+        else if (strcmp(argv[i], "-f") == 0) force = true;
+        else if (strcmp(argv[i], "-o") == 0) {
+            if (argv[++i] != NULL) output_file = argv[i];
+            else {
+                printf("Az -o kapcsolo utan add meg a kimeneti fajlt.\n");
+                print_usage(argv[0]);
+                return 1;
+            }
+        }
+        else {
+            input_file = argv[i];
+            FILE *f = fopen(input_file, "r");
+            if (f != NULL) {
+                fclose(f);
+                continue;
+            }
+            else {
+                fclose(f);
+                printf("A (%s) fajl nem letezik.\n", input_file);
+                print_usage(argv[0]);
+                return 1;
+            }
+        }
+    }
+    //compression
     char *data;
-    int data_len = read_raw("test.txt", &data);
+    int data_len = read_raw(input_file, &data);
     if (data_len < 0) {
-        fprintf(stderr, "Failed to read file 'test.txt'\n");
+        printf("Nem sikerult megnyitni a fajlt (%s).", input_file);
         return 1;
     }
 
@@ -37,7 +87,7 @@ int main(int argc, char* argv[]){
     if (leaf_count == 0) {
         free(data);
         free(frequencies);
-        printf("File is empty.\n");
+        printf("A fajl (%s) ures.", input_file);
         return 0;
     }
 
@@ -83,7 +133,7 @@ int main(int argc, char* argv[]){
     }
 
     if (compress(data, data_len, nodes, root_node, cache, compressed_file) != 0) {
-        fprintf(stderr, "Compression failed.\n");
+        printf("A tomorites nem sikerult.");
         free(data);
         free(nodes);
         for(int i=0; i<256; ++i) free(cache[i]);
@@ -97,10 +147,10 @@ int main(int argc, char* argv[]){
 
     compressed_file->huffman_tree = nodes;
     compressed_file->tree_size = tree_size * sizeof(Node);
-    compressed_file->original_file = "test.txt";
+    compressed_file->original_file = input_file;
     compressed_file->original_size = data_len;
-    compressed_file->file_name = "test.huff";
-    write_compressed(compressed_file, false);
+    compressed_file->file_name = output_file;
+    write_compressed(compressed_file, force);
 
     free(nodes);
     if (compressed_file->compressed_data != NULL) {
@@ -117,23 +167,22 @@ int main(int argc, char* argv[]){
     free(compressed_file);
     
     // decompression
-    remove("test.txt");
     compressed_file = calloc(1, sizeof(Compressed_file));
     if (compressed_file == NULL) {
-        fprintf(stderr, "Failed to allocate memory for compressed_file\n");
+        printf("Nem sikerult lefoglalni a memoriat.");
         return 1;
     }
     if (compressed_file == NULL) {
-        fprintf(stderr, "Failed to allocate memory for compressed_file\n");
+        printf("Nem sikerult lefoglalni a memoriat.");
         return 1;
     }
     if (read_compressed("test.huff", compressed_file) != 0) {
-        fprintf(stderr, "Failed to read compressed file\n");
+        printf("Nem sikerult beovasni a tomoritett fajlt (%s).", input_file);
         free(compressed_file);
         return 1;
     }
     if (compressed_file->original_size <= 0) {
-        fprintf(stderr, "Invalid original size in compressed file\n");
+        printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.", input_file);
         free(compressed_file->file_name);
         free(compressed_file->original_file);
         free(compressed_file->huffman_tree);
@@ -143,7 +192,7 @@ int main(int argc, char* argv[]){
     }
     char *raw_data = malloc(compressed_file->original_size * sizeof(char));
     if (raw_data == NULL) {
-        fprintf(stderr, "Failed to allocate memory for raw_data\n");
+        printf("Nem sikerult lefoglalni a memoriat.");
         free(compressed_file->file_name);
         free(compressed_file->original_file);
         free(compressed_file->huffman_tree);
@@ -153,7 +202,7 @@ int main(int argc, char* argv[]){
     }
     int decompress_result = decompress(compressed_file, raw_data);
     if (decompress_result != 0) {
-        fprintf(stderr, "Decompression failed (error code: %d)\n", decompress_result);
+        printf("Nem sikerult a kitomorites. ");
         free(raw_data);
         free(compressed_file->file_name);
         free(compressed_file->original_file);
@@ -163,7 +212,7 @@ int main(int argc, char* argv[]){
         return 1;
     }
     if (write_raw(compressed_file->original_file, raw_data, compressed_file->original_size, false) < 0) {
-        fprintf(stderr, "Failed to write decompressed file '%s'\n", compressed_file->original_file);
+        printf("Hiba tortent a kimeneti fajl (%s) irasa kozben. \n", compressed_file->original_file);
         free(raw_data);
         free(compressed_file->file_name);
         free(compressed_file->original_file);
