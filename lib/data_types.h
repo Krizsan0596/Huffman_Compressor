@@ -1,6 +1,8 @@
 #ifndef DATA_TYPES_H
 #define DATA_TYPES_H
 
+#include <stdbool.h>
+
 /*
  * A magic az a tomoritett fajlban szereplo azonosito.
  * A fajl beolvasasanal ezt ellenorizzuk.
@@ -57,5 +59,17 @@ typedef enum {
     NO_OVERWRITE = -8,
     SCANF_FAILED = -9
 } ErrorCode;
+
+typedef struct {
+    bool is_dir;
+    union {
+        char *dir_name;
+        struct {
+            long file_size;
+            char *file_path;
+            char *file_data;
+        };
+    };
+} Directory_item;
 
 #endif
