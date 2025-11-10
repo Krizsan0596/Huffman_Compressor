@@ -95,17 +95,29 @@ int main(int argc, char* argv[]){
     if (compress_mode) {
         bool output_default = false;
         if (output_file == NULL) {
-            char *name_end = strchr(input_file, '.');
+            char *dir_end = strrchr(input_file, '/');
+            char *name_end;
+            if (dir_end != NULL) name_end = strrchr(dir_end, '.');
+            else name_end = strrchr(input_file, '.');
+
             char *out;
             if (name_end != NULL) {
                 int name_len = name_end - input_file;
                 out = malloc(name_len + 6);
+                if (out == NULL) {
+                    printf("Nem sikerult lefoglalni a memoriat.");
+                    return 1;
+                }
                 strncpy(out, input_file, name_len);
                 out[name_len] = '\0';
                 strcat(out, ".huff");
             }
             else {
                 out = malloc(strlen(input_file) + 6);
+                if (out == NULL) {
+                    printf("Nem sikerult lefoglalni a memoriat.");
+                    return 1;
+                }
                 strcpy(out, input_file);
                 out[strlen(input_file)] = '\0';
                 strcat(out, ".huff");
@@ -200,8 +212,11 @@ int main(int argc, char* argv[]){
         compressed_file->original_file = input_file;
         compressed_file->original_size = data_len;
         compressed_file->file_name = output_file;
-        write_compressed(compressed_file, force);
-        
+        int write_success = write_compressed(compressed_file, force);
+        if (write_success != 0) {
+            printf("Nem sikerult kiirni a kimeneti fajlt (%s).\n", compressed_file->file_name);
+        }
+
         if (output_default) free(output_file);
         free(nodes);
         if (compressed_file->compressed_data != NULL) {
@@ -216,6 +231,7 @@ int main(int argc, char* argv[]){
         free(cache);
         free(data);
         free(compressed_file);
+        return write_success == 0 ? 0 : 1;
     } else if (extract_mode) {
         Compressed_file *compressed_file = calloc(1, sizeof(Compressed_file));
         if (compressed_file == NULL) {
