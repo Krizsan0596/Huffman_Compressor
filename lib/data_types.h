@@ -1,6 +1,8 @@
 #ifndef DATA_TYPES_H
 #define DATA_TYPES_H
 
+#include <stdbool.h>
+
 static const char magic[4] = {'H', 'U', 'F', 'F'};
 
 typedef enum {
@@ -20,7 +22,7 @@ typedef struct Node {
     };
 } Node;
 
-typedef struct{
+typedef struct {
     char magic[4];
     char *file_name;
     long original_size;
@@ -30,5 +32,17 @@ typedef struct{
     char *compressed_data;
     long data_size; // In bits.
 } Compressed_file;
+
+typedef struct {
+    bool is_dir;
+    union {
+        char *dir_name;
+        struct {
+            long file_size;
+            char *file_path;
+            char *file_data;
+        };
+    };
+} Directory_item;
 
 #endif
