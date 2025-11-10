@@ -177,8 +177,11 @@ int read_compressed(char file_name[], Compressed_file *compressed){
 }
 int write_compressed(Compressed_file *compressed, bool overwrite) {
     long name_len = strlen(compressed->original_file);
-    long file_size = (sizeof(char) * 4) + sizeof(long) + sizeof(long) + name_len * sizeof(char) + sizeof(long) + compressed->tree_size + sizeof(long) + ceil((float)compressed->data_size/8);
+    long file_size = (sizeof(char) * 4) + sizeof(long) + sizeof(long) + name_len * sizeof(char) + sizeof(long) + compressed->tree_size + sizeof(long) + (compressed->data_size + 7) / 8;
     char *data = malloc(file_size);
+    if (data == NULL) {
+        return -1;
+    }
     char *current = &data[0];
     for (int i = 0; i < 4; i++) {
         data[i] = magic[i];

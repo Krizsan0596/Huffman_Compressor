@@ -12,6 +12,4 @@ Testing/
 file_io_test
 compress_test
 huffman
-test.huff
-test.txt
 test_compress_decompress
