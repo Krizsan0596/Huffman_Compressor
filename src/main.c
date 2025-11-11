@@ -7,6 +7,7 @@
 #include "../lib/file.h"
 #include "../lib/compress.h"
 #include "../lib/decompress.h"
+#include "../lib/directory.h"
 #include "../lib/data_types.h"
 #include "../lib/debugmalloc.h"
 

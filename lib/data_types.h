@@ -63,7 +63,7 @@ typedef enum {
 typedef struct {
     bool is_dir;
     union {
-        char *dir_name;
+        char *dir_path;
         struct {
             long file_size;
             char *file_path;
