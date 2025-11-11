@@ -11,6 +11,7 @@ add_executable(${PROJECT_NAME}
     lib/file.c
     lib/compress.c
     lib/decompress.c
+    lib/directory.c
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE lib)
