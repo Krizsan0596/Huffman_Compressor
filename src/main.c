@@ -8,6 +8,10 @@
 #include "../lib/data_types.h"
 #include "../lib/debugmalloc.h"
 
+/*
+ * Kiirja a program hasznalati utasitasat.
+ * Segitseg vagy ervenytelen kapcsolok eseten hivjuk meg.
+ */
 static void print_usage(const char *prog_name) {
     const char *usage =
         "Huffman kodolo\n"
@@ -18,7 +22,7 @@ static void print_usage(const char *prog_name) {
         "\t-x                Kitomorites\n"
         "\t-o KIMENETI_FAJL  Kimeneti fajl megadasa (tomoriteskor, opcionalis).\n"
         "\t-h                Kiirja ezt az utmutatot.\n"
-        "\t-f                Ha letezik a KIMENETI_FAJL, kerdes nelkul felulirja."
+        "\t-f                Ha letezik a KIMENETI_FAJL, kerdes nelkul felulirja.\n"
         "BEMENETI_FAJL: A tomoritendo vagy visszaallitando fajl utvonala.\n"
         "\tA -c es -x kapcsolok kizarjak egymast.";
 
@@ -32,6 +36,10 @@ int main(int argc, char* argv[]){
     char *input_file = NULL;
     char *output_file = NULL;
 
+    /* 
+     * Parancssori opciok feldolgozasa: egy mod valaszthato, az -o a kimenetet, az -f a felulirast kezeli.
+     * Az elso nem kapcsolos argumentum lesz a bemeneti fajl.
+     */
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] == '-') {
             switch (argv[i][1]) {
@@ -72,15 +80,19 @@ int main(int argc, char* argv[]){
         }
     }
 
+    /*
+     * Ellenorizzuk, hogy megadtak-e a bemeneti fajlt, majd leellenorizzuk, hogy olvashato-e.
+     * Ha nem, kilepunk a programbol.
+     */
     if (input_file == NULL) {
-        printf("Nem lett bemeneti fajl megadva.\n");
+        printf("Nem lett bemeneti fajl megadva vagy nem olvashato.\n");
         print_usage(argv[0]);
         return 1;
     }
     
     FILE *f = fopen(input_file, "r");
     if (f == NULL) {
-        printf("A (%s) fajl nem letezik.\n", input_file);
+        printf("A (%s) fajl nem nyithato meg.\n", input_file);
         print_usage(argv[0]);
         return 1;
     }
@@ -92,7 +104,9 @@ int main(int argc, char* argv[]){
         return 1;
     }
 
+    
     if (compress_mode) {
+        // Ha nem adott meg kimeneti fajt a felhasznalo, general egyet.
         bool output_default = false;
         if (output_file == NULL) {
             char *dir_end = strrchr(input_file, '/');
@@ -132,7 +146,8 @@ int main(int argc, char* argv[]){
             printf("Nem sikerult megnyitni a fajlt (%s).", input_file);
             return 1;
         }
-
+        
+        // Megszamolja a bemeneti adat bajtjainak gyakorisagat.
         long *frequencies = calloc(256, sizeof(long));
         if (frequencies == NULL) {
             free(data);
@@ -170,6 +185,7 @@ int main(int argc, char* argv[]){
         }
         free(frequencies);
 
+        // Felepiti a Huffman fat a rendezett levelek tombjebol. 
         sort_nodes(nodes, leaf_count);
         Node *root_node = construct_tree(nodes, leaf_count);
 
@@ -193,7 +209,8 @@ int main(int argc, char* argv[]){
             free(cache);
             return 1; // malloc error
         }
-
+        
+        // Tomoriti a beolvasott adatokat a compressed_file strukturaba.
         if (compress(data, data_len, nodes, root_node, cache, compressed_file) != 0) {
             printf("A tomorites nem sikerult.");
             free(data);
@@ -232,6 +249,11 @@ int main(int argc, char* argv[]){
         free(data);
         free(compressed_file);
         return write_success == 0 ? 0 : 1;
+
+    /*
+     * Kitomoritesi ag: beolvassuk a kapott fajlt, kitomoritunk egy bufferbe,
+     * majd az eredeti nevre vagy a megadott kimenetre irjuk ki a kitomoritett adatot.
+     */
     } else if (extract_mode) {
         Compressed_file *compressed_file = calloc(1, sizeof(Compressed_file));
         if (compressed_file == NULL) {

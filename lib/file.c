@@ -12,6 +12,10 @@
 
 
 
+/*
+ * Meghatarozza egy megnyitott fajl hosszat.
+ * Siker eseten a meretet, hiba eseten -1-et ad vissza.
+ */
 long get_file_size(FILE *f){
     long current = ftell(f);
     if (fseek(f, 0, SEEK_END) != 0) return -1;
@@ -20,6 +24,10 @@ long get_file_size(FILE *f){
     return size;
 } 
 
+/*
+ * Beolvassa a fajlt memoriaba, a pointert a hivo adja meg.
+ * Siker eseten a beolvasott bajtok szamat, hibakor negativ kodot ad vissza.
+ */
 int read_raw(char file_name[], char** data){
     FILE* f;
     f = fopen(file_name, "rb");
@@ -39,6 +47,10 @@ int read_raw(char file_name[], char** data){
     return read_size;
 }
 
+/*
+ * Kiirja a megadott buffert lemezre, feluliras elott rakerdez, ha az overwrite parameter hamis.
+ * Ellenorzi hogy a teljes fajlt sikerult-e kiirni, hiba eseten negativ error kodokat ad vissza.
+ */
 int write_raw(char *file_name, char *data, long file_size, bool overwrite){
     FILE* f;
     f = fopen(file_name, "r");
@@ -53,16 +65,17 @@ int write_raw(char *file_name, char *data, long file_size, bool overwrite){
         else fclose(f);
     }
     f = fopen(file_name, "wb");
-    if (f == NULL) return 1;
-    fwrite(data, sizeof(char), file_size, f);
+    if (f == NULL) return -1;
+    long written_size = fwrite(data, sizeof(char), file_size, f);
     fclose(f);
-    f = fopen(file_name, "rb");
-    if (f == NULL) return 1;
-    long written_size = get_file_size(f);
-    fclose(f);
-    if (file_size != written_size) return 2;
+    if (file_size != written_size) return -2;
     return 0;
 }
+
+/*
+ * Beolvassa a tarolt Compressed_file formatumot, ellenorzi hogy megvannak-e a szukseges adatok.
+ * Az osszes szukseges buffert lefoglalja, visszaadja azt a Compressed_file strukturat amit a write_compressed funkcio kiirt.
+ */
 int read_compressed(char file_name[], Compressed_file *compressed){
     int ret = 0;
     FILE* f = fopen(file_name, "rb");
@@ -175,6 +188,10 @@ int read_compressed(char file_name[], Compressed_file *compressed){
 
     return ret;
 }
+/*
+ * Szerializalja a kapott strukturat majd kiirja a megadott fajlba.
+ * A kiirast a write_raw funkcio vegzi.
+ */
 int write_compressed(Compressed_file *compressed, bool overwrite) {
     long name_len = strlen(compressed->original_file);
     long file_size = (sizeof(char) * 4) + sizeof(long) + sizeof(long) + name_len * sizeof(char) + sizeof(long) + compressed->tree_size + sizeof(long) + (compressed->data_size + 7) / 8;

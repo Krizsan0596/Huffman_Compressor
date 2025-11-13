@@ -6,6 +6,7 @@
 #include "data_types.h"
 #include "debugmalloc.h"
 
+// Segedfuggveny a qsort rendezeshez
 static int compare_nodes(const void *a, const void *b) {
     long freq_a = ((Node*)a)->frequency;
     long freq_b = ((Node*)b)->frequency;
@@ -14,10 +15,15 @@ static int compare_nodes(const void *a, const void *b) {
     return 0;
 }
 
+ // A nodes tombot gyakorisag alapjan rendezi, hogy a Huffman fa felepitese konnyebb legyen.
 void sort_nodes(Node *nodes, int len) {
     qsort(nodes, len, sizeof(Node), compare_nodes);
 }
 
+/*
+ * Vegigmegy a nyers adaton, es helyben noveli a 256 elemu frekvenciatomb ertekeit.
+ * 0-val ter vissza, miutan minden bajtot feldolgozott. A hivotol kapott frequencies tomb nullazott kell legyen.
+ */
 int count_frequencies(char *data, long data_len, long *frequencies) {
     for (int i = 0; i < data_len; i++){
         frequencies[(unsigned char) data[i]] += 1;
@@ -27,6 +33,8 @@ int count_frequencies(char *data, long data_len, long *frequencies) {
 
 
 
+
+// Letrehoz egy levelet, amelyben a bajt es a hozza tartozo gyakorisag tarolodik.
 Node construct_leaf(long frequency, char data) {
     Node leaf = {0};
     leaf.type = LEAF;
@@ -35,6 +43,10 @@ Node construct_leaf(long frequency, char data) {
     return leaf;
 }
 
+/*
+ * Osszeallit egy csomopontot, amely a tombben tarolt 2 gyerekenek az indexet tarolja.
+ * A gyerekek gyakorisaganak osszege lesz ennek a gyakorisaga a Huffman algoritmus szerint.
+ */
 Node construct_branch(Node *nodes, int left_index, int right_index) {
     Node branch = {0};
     branch.type = BRANCH;
@@ -44,6 +56,12 @@ Node construct_branch(Node *nodes, int left_index, int right_index) {
     return branch;
 }
 
+/*
+ * Osszevonja a rendezett leveleket, es Huffman fat epit beloluk.
+ * A gyokerre mutato pointert adja vissza, vagy NULL-t, ha nincs egyetlen level sem.
+ *
+ * A keszitett csomopontokat a levelek utan rakja sorrendbe, igy mindig rendezett lesz a lista. 
+ */
 Node* construct_tree(Node *nodes, long leaf_count) { // nodes is sorted
     if (leaf_count <= 0) return NULL;
     if (leaf_count == 1) {
@@ -74,11 +92,18 @@ Node* construct_tree(Node *nodes, long leaf_count) { // nodes is sorted
     return &nodes[last_branch - 1];
 }
 
+/*
+ * Megnezi, hogy a keresett bajt helye a Huffman faban mar megtalalhato-e a cache tombben.
+ * Ha van talalat, visszaadja a karakterlancot, kulonben NULL-t ad vissza.
+ */
 char* check_cache(char leaf, char **cache) {
     if (cache[(unsigned char) leaf] != NULL) return cache[(unsigned char) leaf];
     else return NULL;
 }
 
+/*
+ * Rekurzivan bejarja a Huffman fat, megkeresi a bajt helyet es osszerakja az utvonalat.
+ */
 char* find_leaf(char leaf, Node *nodes, Node *root_node) {
     char *path = NULL; 
     if (root_node->type == LEAF) {
@@ -110,6 +135,11 @@ char* find_leaf(char leaf, Node *nodes, Node *root_node) {
 }
 
 
+/*
+ * Vegigjarja a Huffman fat, es a kapott adatot tomoritett bitfolyamabba kodolja.
+ * A kitomoriteshez szukseges adatokat betolti egy Compressed_file strukturaba.
+ * 0-t ad vissza siker eseten, negativ ertekeket memoriafoglalasi vagy fa-bejarasi hiba eseten.
+ */
 int compress(char *original_data, long data_len, Node *nodes, Node *root_node, char** cache, Compressed_file *compressed_file) {
     if (data_len == 0) {
         compressed_file->data_size = 0;
