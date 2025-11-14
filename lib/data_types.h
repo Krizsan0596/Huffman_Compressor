@@ -31,6 +31,7 @@ typedef struct Node {
 /*
  * A tomoritett fajl minden fontos adatat tartalmazza: az azonosito szam, fajlnevek, fa, tomoritett adat es meretek.
  * A compress es decompress, valamint a read es write_compressed funkciok ezt a strukturat ertelmezik.
+ * A tomoritett adat meretet bitekben tarolja, igy tudja kezelni a nem teljes bajtnyi tomoritett adatot. (pl. 21 bit)
  */
 typedef struct {
     char magic[4];
