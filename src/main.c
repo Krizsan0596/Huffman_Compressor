@@ -20,10 +20,10 @@ static void print_usage(const char *prog_name) {
         "Opciok:\n"
         "\t-c                Tomorites\n"
         "\t-x                Kitomorites\n"
-        "\t-o KIMENETI_FAJL  Kimeneti fajl megadasa (tomoriteskor, opcionalis).\n"
+        "\t-o KIMENETI_FAJL  Kimeneti fajl megadasa (opcionalis).\n"
         "\t-h                Kiirja ezt az utmutatot.\n"
         "\t-f                Ha letezik a KIMENETI_FAJL, kerdes nelkul felulirja.\n"
-        "BEMENETI_FAJL: A tomoritendo vagy visszaallitando fajl utvonala.\n"
+        "\tBEMENETI_FAJL: A tomoritendo vagy visszaallitando fajl utvonala.\n"
         "\tA -c es -x kapcsolok kizarjak egymast.";
 
     printf(usage, prog_name);
@@ -147,81 +147,82 @@ int main(int argc, char* argv[]){
             return 1;
         }
         
-        // Megszamolja a bemeneti adat bajtjainak gyakorisagat.
-        long *frequencies = calloc(256, sizeof(long));
-        if (frequencies == NULL) {
-            free(data);
-            return 1; // malloc error
-        }
-        count_frequencies(data, data_len, frequencies);
-
-        int leaf_count = 0;
-        for (int i = 0; i < 256; i++) {
-            if (frequencies[i] != 0) {
-                leaf_count++;
-            }
-        }
-
-        if (leaf_count == 0) {
-            free(data);
-            free(frequencies);
-            printf("A fajl (%s) ures.", input_file);
-            return 0;
-        }
-
-        Node *nodes = malloc((2 * leaf_count - 1) * sizeof(Node));
-        if (nodes == NULL) {
-            free(data);
-            free(frequencies);
-            return 1; // malloc error
-        }
-
-        int j = 0;
-        for (int i = 0; i < 256; i++) {
-            if (frequencies[i] != 0) {
-                nodes[j] = construct_leaf(frequencies[i], (char)i);
-                j++;
-            }
-        }
-        free(frequencies);
-
-        // Felepiti a Huffman fat a rendezett levelek tombjebol. 
-        sort_nodes(nodes, leaf_count);
-        Node *root_node = construct_tree(nodes, leaf_count);
-
+        long *frequencies;
+        Compressed_file *compressed_file;
+        Node *nodes;
         long tree_size;
-        if (root_node != NULL) {
-            tree_size = (root_node - nodes) + 1;
-        } else {
-            return 2; //tree error
-        }
-        char **cache = calloc(256, sizeof(char *));
-        if (cache == NULL) {
-            free(data);
-            free(nodes);
-            return 1; // malloc error
-        }
-
-        Compressed_file *compressed_file = malloc(sizeof(Compressed_file));
-        if (compressed_file == NULL) {
-            free(data);
-            free(nodes);
-            free(cache);
-            return 1; // malloc error
-        }
+        char **cache;
+        int res = 0;
         
-        // Tomoriti a beolvasott adatokat a compressed_file strukturaba.
-        if (compress(data, data_len, nodes, root_node, cache, compressed_file) != 0) {
-            printf("A tomorites nem sikerult.");
-            free(data);
-            free(nodes);
-            for (int i = 0; i < 256; ++i) free(cache[i]);
-            free(cache);
-            if (compressed_file->compressed_data != NULL) {
-                free(compressed_file->compressed_data);
+        // A while ciklusbol a vegen garantaltan ki break-elunk, de ha hiba tortenik, akkor a vegere ugrunk.
+        while (true) {
+            // Megszamolja a bemeneti adat bajtjainak gyakorisagat.
+            frequencies = calloc(256, sizeof(long));
+            if (frequencies == NULL) {
+                res = 1; // malloc error
+                break;
             }
-            free(compressed_file);
-            return 1;
+            count_frequencies(data, data_len, frequencies);
+
+            int leaf_count = 0;
+            for (int i = 0; i < 256; i++) {
+                if (frequencies[i] != 0) {
+                    leaf_count++;
+                }
+            }
+
+            if (leaf_count == 0) {
+                free(data);
+                free(frequencies);
+                printf("A fajl (%s) ures.", input_file);
+                res = 0;
+                break;
+            }
+
+            nodes = malloc((2 * leaf_count - 1) * sizeof(Node));
+            if (nodes == NULL) {
+                res = 1; // malloc error
+                break;
+            }
+
+            int j = 0;
+            for (int i = 0; i < 256; i++) {
+                if (frequencies[i] != 0) {
+                    nodes[j] = construct_leaf(frequencies[i], (char)i);
+                    j++;
+                }
+            }
+            free(frequencies);
+            frequencies = NULL;
+
+            // Felepiti a Huffman fat a rendezett levelek tombjebol. 
+            sort_nodes(nodes, leaf_count);
+            Node *root_node = construct_tree(nodes, leaf_count);
+
+            if (root_node != NULL) {
+                tree_size = (root_node - nodes) + 1;
+            } else {
+                res = 2; //tree error
+            }
+            cache = calloc(256, sizeof(char *));
+            if (cache == NULL) {
+                res = 1; // malloc error
+                break;
+            }
+
+            compressed_file = malloc(sizeof(Compressed_file));
+            if (compressed_file == NULL) {
+                res = 1; // malloc error
+                break;
+            }
+            
+            // Tomoriti a beolvasott adatokat a compressed_file strukturaba.
+            if (compress(data, data_len, nodes, root_node, cache, compressed_file) != 0) {
+                printf("A tomorites nem sikerult.");
+                res = 1;
+                break;
+            }
+            break;
         }
 
         compressed_file->huffman_tree = nodes;
@@ -234,6 +235,7 @@ int main(int argc, char* argv[]){
             printf("Nem sikerult kiirni a kimeneti fajlt (%s).\n", compressed_file->file_name);
         }
 
+        free(frequencies);
         if (output_default) free(output_file);
         free(nodes);
         if (compressed_file->compressed_data != NULL) {
@@ -248,62 +250,51 @@ int main(int argc, char* argv[]){
         free(cache);
         free(data);
         free(compressed_file);
-        return write_success == 0 ? 0 : 1;
+        return write_success ? 1 : 0;
 
     /*
      * Kitomoritesi ag: beolvassuk a kapott fajlt, kitomoritunk egy bufferbe,
      * majd az eredeti nevre vagy a megadott kimenetre irjuk ki a kitomoritett adatot.
      */
     } else if (extract_mode) {
-        Compressed_file *compressed_file = calloc(1, sizeof(Compressed_file));
-        if (compressed_file == NULL) {
-            printf("Nem sikerult lefoglalni a memoriat.");
-            return 1;
-        }
-        if (read_compressed(input_file, compressed_file) != 0) {
-            printf("Nem sikerult beovasni a tomoritett fajlt (%s).", input_file);
-            free(compressed_file);
-            return 1;
-        }
-        if (compressed_file->original_size <= 0) {
-            printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.", input_file);
-            free(compressed_file->file_name);
-            free(compressed_file->original_file);
-            free(compressed_file->huffman_tree);
-            free(compressed_file->compressed_data);
-            free(compressed_file);
-            return 1;
-        }
-        char *raw_data = malloc(compressed_file->original_size * sizeof(char));
-        if (raw_data == NULL) {
-            printf("Nem sikerult lefoglalni a memoriat.");
-            free(compressed_file->file_name);
-            free(compressed_file->original_file);
-            free(compressed_file->huffman_tree);
-            free(compressed_file->compressed_data);
-            free(compressed_file);
-            return 1;
-        }
-        int decompress_result = decompress(compressed_file, raw_data);
-        if (decompress_result != 0) {
-            printf("Nem sikerult a kitomorites. ");
-            free(raw_data);
-            free(compressed_file->file_name);
-            free(compressed_file->original_file);
-            free(compressed_file->huffman_tree);
-            free(compressed_file->compressed_data);
-            free(compressed_file);
-            return 1;
-        }
-        if (write_raw(output_file != NULL ? output_file : compressed_file->original_file, raw_data, compressed_file->original_size, force) < 0) {
-            printf("Hiba tortent a kimeneti fajl (%s) irasa kozben. \n", output_file != NULL ? output_file : compressed_file->original_file);
-            free(raw_data);
-            free(compressed_file->file_name);
-            free(compressed_file->original_file);
-            free(compressed_file->huffman_tree);
-            free(compressed_file->compressed_data);
-            free(compressed_file);
-            return 1;
+        Compressed_file *compressed_file;
+        char *raw_data;
+        int res = 0;
+        while (true) {
+            compressed_file = calloc(1, sizeof(Compressed_file));
+            if (compressed_file == NULL) {
+                printf("Nem sikerult lefoglalni a memoriat.");
+                res = 1;
+                break;
+            }
+            if (read_compressed(input_file, compressed_file) != 0) {
+                printf("Nem sikerult beovasni a tomoritett fajlt (%s).", input_file);
+                res = 1;
+                break;
+            }
+            if (compressed_file->original_size <= 0) {
+                printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.", input_file);
+                res = 1;
+                break;
+            }
+            raw_data = malloc(compressed_file->original_size * sizeof(char));
+            if (raw_data == NULL) {
+                printf("Nem sikerult lefoglalni a memoriat.");
+                res = 1;
+                break;
+            }
+            int decompress_result = decompress(compressed_file, raw_data);
+            if (decompress_result != 0) {
+                printf("Nem sikerult a kitomorites. ");
+                res = 1;
+                break;
+            }
+            if (write_raw(output_file != NULL ? output_file : compressed_file->original_file, raw_data, compressed_file->original_size, force) < 0) {
+                printf("Hiba tortent a kimeneti fajl (%s) irasa kozben. \n", output_file != NULL ? output_file : compressed_file->original_file);
+                res = 1;
+                break;
+            }
+            break;
         }
         free(raw_data);
         free(compressed_file->file_name);
@@ -311,7 +302,8 @@ int main(int argc, char* argv[]){
         free(compressed_file->huffman_tree);
         free(compressed_file->compressed_data);
         free(compressed_file);
-    } else {
+    } 
+    else {
         print_usage(argv[0]);
         return 1;
     }
