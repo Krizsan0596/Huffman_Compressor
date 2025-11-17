@@ -46,7 +46,10 @@ int archive_directory(char *path, Directory_item **archive, int *current_index, 
             file.file_path = strdup(newpath);
             if (file.file_path == NULL) return -1;
             file.file_size = read_raw(newpath, &file.file_data);
-            if (file.file_size < 0) return -3;
+            if (file.file_size < 0) {
+                free(file.file_path);
+                return -3;
+            } 
             Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
             if (temp != NULL) *archive = temp;
             else {
