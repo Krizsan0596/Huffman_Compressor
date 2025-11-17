@@ -64,6 +64,42 @@ int archive_directory(char *path, Directory_item **archive, int *current_index, 
     return 0;
 }
 
+int serialize_archive(Directory_item *archive, int archive_size, char **buffer) {
+    if (archive_size == 0) return -2; // empty dir
+    int data_size = 0;
+    for (int i = 0; i < archive_size; i++) {
+        data_size += sizeof(bool);
+        if (archive[i].is_dir) {
+            data_size += strlen(archive[i].dir_path) + 1;
+        }
+        else {
+            data_size += sizeof(long);
+            data_size += strlen(archive[i].file_path) + 1;
+            data_size += archive[i].file_size;
+        }
+    }
+    *buffer = malloc(data_size);
+    if (*buffer == NULL) return -1; // malloc error
+    char *current = *buffer;
+    for (int i = 0; i < archive_size; i++) {
+        memcpy(current, &archive[i].is_dir, sizeof(bool));
+        current += sizeof(bool);
+        if (archive[i].is_dir) {
+            memcpy(current, archive[i].dir_path, strlen(archive[i].dir_path) + 1);
+            current += strlen(archive[i].dir_path) + 1;
+        }
+        else {
+            memcpy(current, &archive[i].file_size, sizeof(long));
+            current += sizeof(long);
+            memcpy(current, archive[i].file_path, strlen(archive[i].file_path) + 1);
+            current += strlen(archive[i].file_path) + 1;
+            memcpy(current, archive[i].file_data, archive[i].file_size);
+            current += archive[i].file_size;
+        }
+    }
+    return 0;
+}
+
 int extract_directory(char *path, Directory_item **archive, int archive_size, bool force) {
     for (int current_index = 0; current_index < archive_size; current_index++) {
         Directory_item *current = &(*archive)[current_index];
