@@ -42,7 +42,6 @@ char* generate_output_file(char *input_file){
         int name_len = name_end - input_file;
         out = malloc(name_len + 6);
         if (out == NULL) {
-            printf("Nem sikerult lefoglalni a memoriat.");
             return NULL;
         }
         strncpy(out, input_file, name_len);

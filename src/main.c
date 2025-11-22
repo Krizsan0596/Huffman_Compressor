@@ -1,7 +1,9 @@
+#include <asm-generic/errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <errno.h>
 #include "../lib/file.h"
 #include "../lib/compress.h"
 #include "../lib/decompress.h"
@@ -61,13 +63,13 @@ int main(int argc, char* argv[]){
                     } else {
                         printf("Az -o kapcsolo utan add meg a kimeneti fajlt.\n");
                         print_usage(argv[0]);
-                        return 1;
+                        return EINVAL;
                     }
                     break;
                 default:
                     printf("Ismeretlen kapcsolo: %s\n", argv[i]);
                     print_usage(argv[0]);
-                    return 1;
+                    return EINVAL;
             }
         } else {
             if (input_file == NULL) {
@@ -75,7 +77,7 @@ int main(int argc, char* argv[]){
             } else {
                 printf("Tobb bemeneti fajl lett megadva.\n");
                 print_usage(argv[0]);
-                return 1;
+                return EINVAL;
             }
         }
     }
@@ -87,21 +89,21 @@ int main(int argc, char* argv[]){
     if (input_file == NULL) {
         printf("Nem lett bemeneti fajl megadva vagy nem olvashato.\n");
         print_usage(argv[0]);
-        return 1;
+        return EINVAL;
     }
     
     FILE *f = fopen(input_file, "r");
     if (f == NULL) {
         printf("A (%s) fajl nem nyithato meg.\n", input_file);
         print_usage(argv[0]);
-        return 1;
+        return ENOENT;
     }
     fclose(f);
 
     if (compress_mode && extract_mode) {
         printf("A -c es -x kapcsolok kizarjak egymast.\n");
         print_usage(argv[0]);
-        return 1;
+        return EINVAL;
     }
 
     
@@ -113,7 +115,7 @@ int main(int argc, char* argv[]){
             output_file = generate_output_file(input_file);
             if (output_file == NULL) {
                 printf("Nem sikerult lefoglalni a memoriat.");
-                return 1;
+                return ENOMEM;
             }
         }
 
@@ -121,7 +123,7 @@ int main(int argc, char* argv[]){
         int data_len = read_raw(input_file, &data);
         if (data_len < 0) {
             printf("Nem sikerult megnyitni a fajlt (%s).", input_file);
-            return 1;
+            return EIO;
         }
         
         long *frequencies;
@@ -136,7 +138,7 @@ int main(int argc, char* argv[]){
             // Megszamolja a bemeneti adat bajtjainak gyakorisagat.
             frequencies = calloc(256, sizeof(long));
             if (frequencies == NULL) {
-                res = MALLOC_ERROR; // malloc error
+                res = MALLOC_ERROR;
                 break;
             }
             count_frequencies(data, data_len, frequencies);
@@ -152,13 +154,13 @@ int main(int argc, char* argv[]){
                 free(data);
                 free(frequencies);
                 printf("A fajl (%s) ures.", input_file);
-                res = 0;
+                res = SUCCESS;
                 break;
             }
 
             nodes = malloc((2 * leaf_count - 1) * sizeof(Node));
             if (nodes == NULL) {
-                res = MALLOC_ERROR; // malloc error
+                res = MALLOC_ERROR;
                 break;
             }
 
@@ -179,17 +181,17 @@ int main(int argc, char* argv[]){
             if (root_node != NULL) {
                 tree_size = (root_node - nodes) + 1;
             } else {
-                res = TREE_ERROR; //tree error
+                res = TREE_ERROR;
             }
             cache = calloc(256, sizeof(char *));
             if (cache == NULL) {
-                res = MALLOC_ERROR; // malloc error
+                res = MALLOC_ERROR;
                 break;
             }
 
             compressed_file = malloc(sizeof(Compressed_file));
             if (compressed_file == NULL) {
-                res = MALLOC_ERROR; // malloc error
+                res = MALLOC_ERROR;
                 break;
             }
             
@@ -211,8 +213,10 @@ int main(int argc, char* argv[]){
         if (write_res < 0) {
             if (write_res == NO_OVERWRITE) {
                 printf("A fajlt nem irtam felul, nem tortent meg a tomorites.\n");
+                write_res = ECANCELED;
             } else {
                 printf("Nem sikerult kiirni a kimeneti fajlt (%s).\n", compressed_file->file_name);
+                write_res = EIO;
             }
         }
 
@@ -231,7 +235,7 @@ int main(int argc, char* argv[]){
         free(cache);
         free(data);
         free(compressed_file);
-        return write_res < 0 ? 1 : 0;
+        return write_res;
 
     /*
      * Kitomoritesi ag: beolvassuk a kapott fajlt, kitomoritunk egy bufferbe,
@@ -245,36 +249,41 @@ int main(int argc, char* argv[]){
             compressed_file = calloc(1, sizeof(Compressed_file));
             if (compressed_file == NULL) {
                 printf("Nem sikerult lefoglalni a memoriat.");
-                res = 1;
+                res = ENOMEM;
                 break;
             }
             int read_res = read_compressed(input_file, compressed_file);
             if (read_res != 0) {
+                if (read_res == FILE_MAGIC_ERROR) {
+                    printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.", input_file);
+                    res = EBADF;
+                    break;
+                }
                 printf("Nem sikerult beovasni a tomoritett fajlt (%s).", input_file);
-                res = 1;
+                res = EIO;
                 break;
             }
             if (compressed_file->original_size <= 0) {
                 printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.", input_file);
-                res = 1;
+                res = EINVAL;
                 break;
             }
             raw_data = malloc(compressed_file->original_size * sizeof(char));
             if (raw_data == NULL) {
                 printf("Nem sikerult lefoglalni a memoriat.");
-                res = 1;
+                res = ENOMEM;
                 break;
             }
             int decompress_result = decompress(compressed_file, raw_data);
             if (decompress_result != 0) {
                 printf("Nem sikerult a kitomorites. ");
-                res = 1;
+                res = EIO;
                 break;
             }
             int write_res = write_raw(output_file != NULL ? output_file : compressed_file->original_file, raw_data, compressed_file->original_size, force);
             if (write_res < 0) {
                 printf("Hiba tortent a kimeneti fajl (%s) irasa kozben. \n", output_file != NULL ? output_file : compressed_file->original_file);
-                res = 1;
+                res = EIO;
                 break;
             }
             break;
@@ -285,10 +294,10 @@ int main(int argc, char* argv[]){
         free(compressed_file->huffman_tree);
         free(compressed_file->compressed_data);
         free(compressed_file);
+        return res;
     } 
     else {
         print_usage(argv[0]);
-        return 1;
+        return EINVAL;
     }
-    return 0;
 }
