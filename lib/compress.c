@@ -54,7 +54,7 @@ char* generate_output_file(char *input_file){
             return NULL;
         }
         strcpy(out, input_file);
-        out[strlen(input_file)] = '\0';
+
         strcat(out, ".huff");
     }
     return out;

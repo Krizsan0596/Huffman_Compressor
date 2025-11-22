@@ -1,4 +1,4 @@
-#include <asm-generic/errno.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -182,6 +182,7 @@ int main(int argc, char* argv[]){
                 tree_size = (root_node - nodes) + 1;
             } else {
                 res = TREE_ERROR;
+                break;
             }
             cache = calloc(256, sizeof(char *));
             if (cache == NULL) {
@@ -259,7 +260,7 @@ int main(int argc, char* argv[]){
                     res = EBADF;
                     break;
                 }
-                printf("Nem sikerult beovasni a tomoritett fajlt (%s).", input_file);
+                printf("Nem sikerult beolvasni a tomoritett fajlt (%s).", input_file);
                 res = EIO;
                 break;
             }
