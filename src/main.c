@@ -109,35 +109,12 @@ int main(int argc, char* argv[]){
         // Ha nem adott meg kimeneti fajt a felhasznalo, general egyet.
         bool output_default = false;
         if (output_file == NULL) {
-            char *dir_end = strrchr(input_file, '/');
-            char *name_end;
-            if (dir_end != NULL) name_end = strrchr(dir_end, '.');
-            else name_end = strrchr(input_file, '.');
-
-            char *out;
-            if (name_end != NULL) {
-                int name_len = name_end - input_file;
-                out = malloc(name_len + 6);
-                if (out == NULL) {
-                    printf("Nem sikerult lefoglalni a memoriat.");
-                    return 1;
-                }
-                strncpy(out, input_file, name_len);
-                out[name_len] = '\0';
-                strcat(out, ".huff");
-            }
-            else {
-                out = malloc(strlen(input_file) + 6);
-                if (out == NULL) {
-                    printf("Nem sikerult lefoglalni a memoriat.");
-                    return 1;
-                }
-                strcpy(out, input_file);
-                out[strlen(input_file)] = '\0';
-                strcat(out, ".huff");
-            }
             output_default = true;
-            output_file = out;
+            output_file = generate_output_file(input_file);
+            if (output_file == NULL) {
+                printf("Nem sikerult lefoglalni a memoriat.");
+                return 1;
+            }
         }
 
         char *data;
@@ -159,7 +136,7 @@ int main(int argc, char* argv[]){
             // Megszamolja a bemeneti adat bajtjainak gyakorisagat.
             frequencies = calloc(256, sizeof(long));
             if (frequencies == NULL) {
-                res = 1; // malloc error
+                res = MALLOC_ERROR; // malloc error
                 break;
             }
             count_frequencies(data, data_len, frequencies);
@@ -181,7 +158,7 @@ int main(int argc, char* argv[]){
 
             nodes = malloc((2 * leaf_count - 1) * sizeof(Node));
             if (nodes == NULL) {
-                res = 1; // malloc error
+                res = MALLOC_ERROR; // malloc error
                 break;
             }
 
@@ -202,24 +179,24 @@ int main(int argc, char* argv[]){
             if (root_node != NULL) {
                 tree_size = (root_node - nodes) + 1;
             } else {
-                res = 2; //tree error
+                res = TREE_ERROR; //tree error
             }
             cache = calloc(256, sizeof(char *));
             if (cache == NULL) {
-                res = 1; // malloc error
+                res = MALLOC_ERROR; // malloc error
                 break;
             }
 
             compressed_file = malloc(sizeof(Compressed_file));
             if (compressed_file == NULL) {
-                res = 1; // malloc error
+                res = MALLOC_ERROR; // malloc error
                 break;
             }
             
             // Tomoriti a beolvasott adatokat a compressed_file strukturaba.
-            if (compress(data, data_len, nodes, root_node, cache, compressed_file) != 0) {
-                printf("A tomorites nem sikerult.");
-                res = 1;
+            int compress_res = compress(data, data_len, nodes, root_node, cache, compressed_file);
+            if (compress_res != 0) {
+                res = compress_res;
                 break;
             }
             break;
@@ -230,9 +207,13 @@ int main(int argc, char* argv[]){
         compressed_file->original_file = input_file;
         compressed_file->original_size = data_len;
         compressed_file->file_name = output_file;
-        int write_success = write_compressed(compressed_file, force);
-        if (write_success != 0) {
-            printf("Nem sikerult kiirni a kimeneti fajlt (%s).\n", compressed_file->file_name);
+        int write_res = write_compressed(compressed_file, force);
+        if (write_res < 0) {
+            if (write_res == NO_OVERWRITE) {
+                printf("A fajlt nem irtam felul, nem tortent meg a tomorites.\n");
+            } else {
+                printf("Nem sikerult kiirni a kimeneti fajlt (%s).\n", compressed_file->file_name);
+            }
         }
 
         free(frequencies);
@@ -250,7 +231,7 @@ int main(int argc, char* argv[]){
         free(cache);
         free(data);
         free(compressed_file);
-        return write_success ? 1 : 0;
+        return write_res < 0 ? 1 : 0;
 
     /*
      * Kitomoritesi ag: beolvassuk a kapott fajlt, kitomoritunk egy bufferbe,
@@ -267,7 +248,8 @@ int main(int argc, char* argv[]){
                 res = 1;
                 break;
             }
-            if (read_compressed(input_file, compressed_file) != 0) {
+            int read_res = read_compressed(input_file, compressed_file);
+            if (read_res != 0) {
                 printf("Nem sikerult beovasni a tomoritett fajlt (%s).", input_file);
                 res = 1;
                 break;
@@ -289,7 +271,8 @@ int main(int argc, char* argv[]){
                 res = 1;
                 break;
             }
-            if (write_raw(output_file != NULL ? output_file : compressed_file->original_file, raw_data, compressed_file->original_size, force) < 0) {
+            int write_res = write_raw(output_file != NULL ? output_file : compressed_file->original_file, raw_data, compressed_file->original_size, force);
+            if (write_res < 0) {
                 printf("Hiba tortent a kimeneti fajl (%s) irasa kozben. \n", output_file != NULL ? output_file : compressed_file->original_file);
                 res = 1;
                 break;

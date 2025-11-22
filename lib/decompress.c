@@ -12,7 +12,7 @@ int decompress(Compressed_file *compressed, char *raw) {
     long root_index = (compressed->tree_size / sizeof(Node)) - 1;
 
     if (root_index < 0) {
-        return -1; // empty tree
+        return TREE_ERROR;
     }
 
     long current_node = root_index;

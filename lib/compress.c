@@ -31,8 +31,35 @@ int count_frequencies(char *data, long data_len, long *frequencies) {
     return 0;
 }
 
+char* generate_output_file(char *input_file){
+    char *dir_end = strrchr(input_file, '/');
+    char *name_end;
+    if (dir_end != NULL) name_end = strrchr(dir_end, '.');
+    else name_end = strrchr(input_file, '.');
 
-
+    char *out;
+    if (name_end != NULL) {
+        int name_len = name_end - input_file;
+        out = malloc(name_len + 6);
+        if (out == NULL) {
+            printf("Nem sikerult lefoglalni a memoriat.");
+            return NULL;
+        }
+        strncpy(out, input_file, name_len);
+        out[name_len] = '\0';
+        strcat(out, ".huff");
+    }
+    else {
+        out = malloc(strlen(input_file) + 6);
+        if (out == NULL) {
+            return NULL;
+        }
+        strcpy(out, input_file);
+        out[strlen(input_file)] = '\0';
+        strcat(out, ".huff");
+    }
+    return out;
+}
 
 // Letrehoz egy levelet, amelyben a bajt es a hozza tartozo gyakorisag tarolodik.
 Node construct_leaf(long frequency, char data) {
@@ -150,7 +177,7 @@ int compress(char *original_data, long data_len, Node *nodes, Node *root_node, c
     compressed_file->compressed_data = malloc(data_len * sizeof(char));
     if (compressed_file->compressed_data == NULL) {
         compressed_file->data_size = 0;
-        return -1; // Malloc error
+        return MALLOC_ERROR;
     }
 
     long total_bits = 0;
@@ -167,7 +194,7 @@ int compress(char *original_data, long data_len, Node *nodes, Node *root_node, c
                 free(compressed_file->compressed_data);
                 compressed_file->compressed_data = NULL;
                 compressed_file->data_size = 0;
-                return -2; // tree error
+                return TREE_ERROR;
             }
         }
 

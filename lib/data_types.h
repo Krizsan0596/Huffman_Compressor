@@ -44,4 +44,18 @@ typedef struct {
     long data_size; // In bits.
 } Compressed_file;
 
+// A segedfuggvenyek hibakodjait tarolja.
+typedef enum {
+    SUCCESS = 0,
+    MALLOC_ERROR = -1,
+    FILE_READ_ERROR = -2,
+    FILE_MAGIC_ERROR = -3,
+    TREE_ERROR = -4,
+    FILE_WRITE_ERROR = -5,
+    DECOMPRESSION_ERROR = -6,
+    COMPRESSION_ERROR = -7,
+    NO_OVERWRITE = -8,
+    SCANF_FAILED = -9
+} ErrorCode;
+
 #endif

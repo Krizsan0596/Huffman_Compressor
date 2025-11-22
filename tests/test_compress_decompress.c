@@ -39,7 +39,7 @@ int main() {
     }
     else {
         free(nodes);
-        return 2; //tree error
+        return TREE_ERROR;
     }
 
     char **cache = calloc(256, sizeof(char*));
