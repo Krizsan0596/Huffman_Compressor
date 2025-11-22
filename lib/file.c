@@ -18,7 +18,7 @@
  */
 long get_file_size(FILE *f){
     long current = ftell(f);
-    if (fseek(f, 0, SEEK_END) != 0) return -1;
+    if (fseek(f, 0, SEEK_END) != 0) return FILE_READ_ERROR;
     long size = ftell(f);
     fseek(f, 0, current);
     return size;
@@ -31,18 +31,18 @@ long get_file_size(FILE *f){
 int read_raw(char file_name[], char** data){
     FILE* f;
     f = fopen(file_name, "rb");
-    if (f == NULL) return -1; // Not exists.
+    if (f == NULL) return FILE_READ_ERROR; // Not exists.
     long file_size = get_file_size(f);
     *data = (char*)malloc(file_size);
     if (*data == NULL) {
         fclose(f);
-        return -3; // malloc error
+        return MALLOC_ERROR;
     }
     size_t read_size = fread(*data, sizeof(char), file_size, f);
     fclose(f);
     if (read_size != file_size) {
         free(*data);
-        return -2;
+        return FILE_READ_ERROR;
     }
     return read_size;
 }
@@ -59,16 +59,16 @@ int write_raw(char *file_name, char *data, long file_size, bool overwrite){
             fclose(f);
             printf("Letezik a fajl (%s). Felulirjam? [I/n]>", file_name);
             char input;
-            if (scanf(" %c", &input) != 1) return 4; 
-            if (tolower(input) != 'i') return 3;
+            if (scanf(" %c", &input) != 1) return SCANF_FAILED; 
+            if (tolower(input) != 'i') return NO_OVERWRITE;
         }
         else fclose(f);
     }
     f = fopen(file_name, "wb");
-    if (f == NULL) return -1;
+    if (f == NULL) return FILE_WRITE_ERROR;
     long written_size = fwrite(data, sizeof(char), file_size, f);
     fclose(f);
-    if (file_size != written_size) return -2;
+    if (file_size != written_size) return FILE_WRITE_ERROR;
     return 0;
 }
 
@@ -80,7 +80,7 @@ int read_compressed(char file_name[], Compressed_file *compressed){
     int ret = 0;
     FILE* f = fopen(file_name, "rb");
     if (f == NULL) {
-        return 1; 
+        return FILE_READ_ERROR; 
     }
 
     compressed->original_file = NULL;
@@ -90,83 +90,83 @@ int read_compressed(char file_name[], Compressed_file *compressed){
 
     while (true) {
         if (fread(compressed->magic, sizeof(char), sizeof(magic), f) != sizeof(magic)) {
-            ret = 2; // File read error
+            ret = FILE_READ_ERROR;
             break;
         }
 
         if (memcmp(compressed->magic, magic, sizeof(magic)) != 0) {
-            ret = 3; // Magic error
+            ret = FILE_MAGIC_ERROR;
             break;
         }
 
         if (fread(&compressed->original_size, sizeof(long), 1, f) != 1) {
-            ret = 2;
+            ret = FILE_READ_ERROR;
             break;
         }
 
         long name_len = 0;
         if (fread(&name_len, sizeof(long), 1, f) != 1) {
-            ret = 2;
+            ret = FILE_READ_ERROR;
             break;
         }
         if (name_len < 0) {
-            ret = 3;
+            ret = FILE_MAGIC_ERROR;
             break;
         }
 
         compressed->original_file = (char*)malloc(name_len + 1);
         if (compressed->original_file == NULL) {
-            ret = -1; // Malloc error
+            ret = MALLOC_ERROR;
             break;
         }
         if ((long)fread(compressed->original_file, sizeof(char), name_len, f) != name_len) {
-            ret = 2;
+            ret = FILE_READ_ERROR;
             break;
         }
         compressed->original_file[name_len] = '\0';
 
         if (fread(&compressed->tree_size, sizeof(long), 1, f) != 1) {
-            ret = 2;
+            ret = FILE_READ_ERROR;
             break;
         }
         if (compressed->tree_size < 0) {
-            ret = 3;
+            ret = FILE_MAGIC_ERROR;
             break;
         }
 
         compressed->huffman_tree = (Node*)malloc(compressed->tree_size);
         if (compressed->huffman_tree == NULL) {
-            ret = -1;
+            ret = MALLOC_ERROR;
             break;
         }
         if ((long)fread(compressed->huffman_tree, sizeof(char), compressed->tree_size, f) != compressed->tree_size) {
-            ret = 2;
+            ret = FILE_READ_ERROR;
             break;
         }
 
         if (fread(&compressed->data_size, sizeof(long), 1, f) != 1) {
-            ret = 2;
+            ret = FILE_READ_ERROR;
             break;
         }
         if (compressed->data_size < 0) {
-            ret = 3;
+            ret = FILE_MAGIC_ERROR;
             break;
         }
 
         long compressed_bytes = (long)ceil((double)compressed->data_size / 8.0);
         compressed->compressed_data = (char*)malloc(compressed_bytes * sizeof(char));
         if (compressed->compressed_data == NULL) {
-            ret = -1;
+            ret = MALLOC_ERROR;
             break;
         }
         if ((long)fread(compressed->compressed_data, sizeof(char), compressed_bytes, f) != compressed_bytes) {
-            ret = 2;
+            ret = FILE_READ_ERROR;
             break;
         }
 
         compressed->file_name = strdup(file_name);
         if (compressed->file_name == NULL) {
-            ret = -1;
+            ret = MALLOC_ERROR;
             break;
         }
 
@@ -197,7 +197,7 @@ int write_compressed(Compressed_file *compressed, bool overwrite) {
     long file_size = (sizeof(char) * 4) + sizeof(long) + sizeof(long) + name_len * sizeof(char) + sizeof(long) + compressed->tree_size + sizeof(long) + (compressed->data_size + 7) / 8;
     char *data = malloc(file_size);
     if (data == NULL) {
-        return -1;
+        return MALLOC_ERROR;
     }
     char *current = &data[0];
     for (int i = 0; i < 4; i++) {
