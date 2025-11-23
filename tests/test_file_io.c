@@ -23,7 +23,7 @@ void test_file_io() {
 
     // 2. Action
     int write_result = write_compressed(&original_data, true);
-    assert(write_result == 0);
+    assert(write_result >= 0);
 
     // 3. Verification
     Compressed_file read_data;

@@ -221,6 +221,9 @@ int main(int argc, char* argv[]){
                 write_res = EIO;
             }
         }
+        else {
+            printf("A tomorites sikeres. A tomorites aranya: %d%%.", (write_res * 100)/data_len);
+        }
 
         free(frequencies);
         if (output_default) free(output_file);

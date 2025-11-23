@@ -69,7 +69,7 @@ int write_raw(char *file_name, char *data, long file_size, bool overwrite){
     long written_size = fwrite(data, sizeof(char), file_size, f);
     fclose(f);
     if (file_size != written_size) return FILE_WRITE_ERROR;
-    return SUCCESS;
+    return written_size;
 }
 
 /*
@@ -77,7 +77,7 @@ int write_raw(char *file_name, char *data, long file_size, bool overwrite){
  * Az osszes szukseges buffert lefoglalja, visszaadja azt a Compressed_file strukturat amit a write_compressed funkcio kiirt.
  */
 int read_compressed(char file_name[], Compressed_file *compressed){
-    int ret = 0;
+    int ret = SUCCESS;
     FILE* f = fopen(file_name, "rb");
     if (f == NULL) {
         return FILE_READ_ERROR; 
