@@ -61,15 +61,15 @@ int archive_directory(char *path, Directory_item **archive, int *current_index, 
             (*archive_size)++;
             memcpy(&(*archive)[(*current_index)++], &file, sizeof(Directory_item));
         }
-        free(newpath);
+free(newpath);
     }
     closedir(directory);
     return 0;
 }
 
-int serialize_archive(Directory_item *archive, int archive_size, char **buffer) {
+long serialize_archive(Directory_item *archive, int archive_size, char **buffer) {
     if (archive_size == 0) return -2; // empty dir
-    int data_size = 0;
+    int data_size = sizeof(int);
     for (int i = 0; i < archive_size; i++) {
         data_size += sizeof(bool);
         if (archive[i].is_dir) {
@@ -84,6 +84,8 @@ int serialize_archive(Directory_item *archive, int archive_size, char **buffer) 
     *buffer = malloc(data_size);
     if (*buffer == NULL) return -1; // malloc error
     char *current = *buffer;
+    memcpy(current, &archive_size, sizeof(int));
+    current += sizeof(int);
     for (int i = 0; i < archive_size; i++) {
         memcpy(current, &archive[i].is_dir, sizeof(bool));
         current += sizeof(bool);
@@ -100,7 +102,7 @@ int serialize_archive(Directory_item *archive, int archive_size, char **buffer) 
             current += archive[i].file_size;
         }
     }
-    return 0;
+    return data_size;
 }
 
 int extract_directory(char *path, Directory_item **archive, int archive_size, bool force) {
@@ -112,6 +114,37 @@ int extract_directory(char *path, Directory_item **archive, int archive_size, bo
         else {
             if (write_raw(current->file_path, current->file_data, current->file_size, force) != 0) return -2;
         }
+    }
+    return 0;
+}
+
+int deserialize_archive(Directory_item **archive, char *buffer) {
+    int archive_size;
+    char *current = buffer;
+    memcpy(&archive_size, current, sizeof(int));
+    current += sizeof(int);
+    *archive = malloc(archive_size * sizeof(Directory_item));
+    int i = 0;
+    while (i < archive_size) {
+        memcpy(&(*archive)[i].is_dir, current, sizeof(bool));
+        current += sizeof(bool);
+        if ((*archive)[i].is_dir) {
+            char *end = strchr(current, '\0');
+            int n = end - current + 1;
+            memcpy(&(*archive)[i].dir_path, current, n);
+            current += n;
+        }
+        else {
+            memcpy(&(*archive)[i].file_size, current, sizeof(long));
+            current += sizeof(long);
+            char *end = strchr(current, '\0');
+            int n = end - current + 1;
+            memcpy(&(*archive)[i].file_path, current, n);
+            current += n;
+            memcpy(&(*archive)[i].file_data, current, (*archive)[i].file_size);
+            current += (*archive)[i].file_size;
+        }
+        i++;
     }
     return 0;
 }
