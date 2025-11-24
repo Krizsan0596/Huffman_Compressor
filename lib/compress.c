@@ -229,14 +229,7 @@ int compress(char *original_data, long data_len, Node *nodes, Node *root_node, c
     return 0;
 }
 
-int run_compression(char *input_file, char *output_file, bool force, bool output_default) {
-    char *data;
-    int data_len = read_raw(input_file, &data);
-    if (data_len < 0) {
-        printf("Nem sikerult megnyitni a fajlt (%s).", input_file);
-        return EIO;
-    }
-    
+int run_compression(char *input_file, char *output_file, char *data, int data_len, bool force, bool output_default) {
     long *frequencies;
     Compressed_file *compressed_file;
     Node *nodes;

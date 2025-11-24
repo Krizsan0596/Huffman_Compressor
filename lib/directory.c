@@ -61,7 +61,7 @@ int archive_directory(char *path, Directory_item **archive, int *current_index, 
             (*archive_size)++;
             memcpy(&(*archive)[(*current_index)++], &file, sizeof(Directory_item));
         }
-free(newpath);
+        free(newpath);
     }
     closedir(directory);
     return 0;
