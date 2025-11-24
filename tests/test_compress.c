@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <math.h>
 #include <string.h>
+#include "../lib/file.h"
 #include "../lib/compress.h"
 #include "../lib/data_types.h"
 #include "../lib/debugmalloc.h"
