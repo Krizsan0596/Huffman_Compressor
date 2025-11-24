@@ -119,8 +119,15 @@ int main(int argc, char* argv[]){
                 return ENOMEM;
             }
         }
-        
-        int res = run_compression(input_file, output_file, force, output_default);
+        if (!directory){
+            char *data;
+            int data_len = read_raw(input_file, &data);
+            if (data_len < 0) {
+                printf("Nem sikerult megnyitni a fajlt (%s).", input_file);
+                return EIO;
+            }
+        }
+        int res = run_compression(input_file, output_file, data, data_len, force, output_default);
         return res;
 
     /*
