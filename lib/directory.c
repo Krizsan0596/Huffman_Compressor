@@ -8,9 +8,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-int archive_directory(char *path, Directory_item **archive, int *current_index, int *archive_size) {
+long archive_directory(char *path, Directory_item **archive, int *current_index, int *archive_size) {
     DIR *directory = opendir(path);
     if (directory == NULL) return -1;
+    long dir_size = 0;
     while (true) {
         struct dirent *dir = readdir(directory);
         if (dir == NULL) break;
@@ -20,10 +21,11 @@ int archive_directory(char *path, Directory_item **archive, int *current_index, 
         strcpy(newpath, path);
         strcat(newpath, "/");
         strcat(newpath, dir->d_name);
+
         if (dir->d_type == DT_DIR) {
             Directory_item subdir = {0};
             subdir.is_dir = true;
-            subdir.dir_path = strdup(dir->d_name);
+            subdir.dir_path = strdup(newpath);
             if (subdir.dir_path == NULL) return -1;
             Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
             if (temp != NULL) *archive = temp;
@@ -46,6 +48,7 @@ int archive_directory(char *path, Directory_item **archive, int *current_index, 
             file.file_path = strdup(newpath);
             if (file.file_path == NULL) return -1;
             file.file_size = read_raw(newpath, &file.file_data);
+            dir_size += file.file_size;
             if (file.file_size < 0) {
                 free(file.file_path);
                 return -3;
@@ -64,7 +67,7 @@ int archive_directory(char *path, Directory_item **archive, int *current_index, 
         free(newpath);
     }
     closedir(directory);
-    return 0;
+    return dir_size;
 }
 
 long serialize_archive(Directory_item *archive, int archive_size, char **buffer) {
@@ -105,15 +108,30 @@ long serialize_archive(Directory_item *archive, int archive_size, char **buffer)
     return data_size;
 }
 
-int extract_directory(char *path, Directory_item **archive, int archive_size, bool force) {
+
+int extract_directory(char *path, Directory_item *archive, int archive_size, bool force) {
     for (int current_index = 0; current_index < archive_size; current_index++) {
-        Directory_item *current = &(*archive)[current_index];
+        Directory_item *current = &archive[current_index];
+        char *full_path = malloc(strlen(path) + (current->is_dir ? strlen(current->dir_path) : strlen(current->file_path)) + 2);
+        if (full_path == NULL) return -1;
+        
+        strcpy(full_path, path);
+        strcat(full_path, "/");
+        strcat(full_path, current->is_dir ? current->dir_path : current->file_path);
+
         if (current->is_dir) {
-           if (mkdir(current->dir_path, 0755) != 0) return -1; 
+           if (mkdir(full_path, 0755) != 0) {
+               free(full_path);
+               return -1;
+           }
         }
         else {
-            if (write_raw(current->file_path, current->file_data, current->file_size, force) != 0) return -2;
+            if (write_raw(full_path, current->file_data, current->file_size, force) != 0) {
+                free(full_path);
+                return -2;
+            }
         }
+        free(full_path);
     }
     return 0;
 }
@@ -131,6 +149,8 @@ int deserialize_archive(Directory_item **archive, char *buffer) {
         if ((*archive)[i].is_dir) {
             char *end = strchr(current, '\0');
             int n = end - current + 1;
+            (*archive)[i].dir_path = malloc(n);
+            if ((*archive)[i].dir_path == NULL) return MALLOC_ERROR;
             memcpy(&(*archive)[i].dir_path, current, n);
             current += n;
         }
@@ -139,8 +159,12 @@ int deserialize_archive(Directory_item **archive, char *buffer) {
             current += sizeof(long);
             char *end = strchr(current, '\0');
             int n = end - current + 1;
+            (*archive)[i].file_path = malloc(n);
+            if ((*archive)[i].file_path == NULL) return MALLOC_ERROR;
             memcpy(&(*archive)[i].file_path, current, n);
             current += n;
+            (*archive)[i].file_data = malloc((*archive)[i].file_size);
+            if ((*archive)[i].file_data == NULL) return -1;
             memcpy(&(*archive)[i].file_data, current, (*archive)[i].file_size);
             current += (*archive)[i].file_size;
         }

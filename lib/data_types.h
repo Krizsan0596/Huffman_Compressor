@@ -37,6 +37,7 @@ typedef struct Node {
  */
 typedef struct {
     char magic[4];
+    bool is_dir;
     char *file_name;
     long original_size;
     char *original_file;
