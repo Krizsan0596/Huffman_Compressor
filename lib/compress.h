@@ -2,6 +2,7 @@
 #define COMPRESS_H
 
 #include "data_types.h"
+#include <stdbool.h>
 
 int count_frequencies(char *data, long data_len, long *frequencies);
 Node* construct_tree(Node *nodes, long leaf_count);
