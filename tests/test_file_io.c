@@ -10,6 +10,8 @@
 void test_file_io() {
     // 1. Setup
     Compressed_file original_data;
+    memcpy(original_data.magic, magic, sizeof(original_data.magic));
+    original_data.is_dir = false;
     original_data.original_size = 123;
     original_data.original_file = strdup("test.txt");
     original_data.tree_size = 45;

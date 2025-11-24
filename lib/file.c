@@ -1,9 +1,6 @@
 #include "file.h"
 #include "data_types.h"
-#include <ctype.h>
-#include <iso646.h>
 #include <math.h>
-#include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -96,6 +93,11 @@ int read_compressed(char file_name[], Compressed_file *compressed){
 
         if (memcmp(compressed->magic, magic, sizeof(magic)) != 0) {
             ret = FILE_MAGIC_ERROR;
+            break;
+        }
+
+        if (fread(&compressed->is_dir, sizeof(bool), 1, f) != sizeof(bool)) {
+            ret = FILE_READ_ERROR;
             break;
         }
 
@@ -194,16 +196,18 @@ int read_compressed(char file_name[], Compressed_file *compressed){
  */
 int write_compressed(Compressed_file *compressed, bool overwrite) {
     long name_len = strlen(compressed->original_file);
-    long file_size = (sizeof(char) * 4) + sizeof(long) + sizeof(long) + name_len * sizeof(char) + sizeof(long) + compressed->tree_size + sizeof(long) + (compressed->data_size + 7) / 8;
+    long file_size = (sizeof(char) * 4) + sizeof(bool) + sizeof(long) + sizeof(long) + name_len * sizeof(char) + sizeof(long) + compressed->tree_size + sizeof(long) + (compressed->data_size + 7) / 8;
     char *data = malloc(file_size);
     if (data == NULL) {
         return MALLOC_ERROR;
     }
     char *current = &data[0];
     for (int i = 0; i < 4; i++) {
-        data[i] = magic[i];
+        data[i] = compressed->magic[i];
     }
     current += 4;
+    memcpy(current, &compressed->is_dir, sizeof(bool));
+    current += sizeof(bool);
     memcpy(current, &compressed->original_size, sizeof(long));
     current += sizeof(long);
     memcpy(current, &name_len, sizeof(long));
