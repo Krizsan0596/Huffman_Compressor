@@ -66,7 +66,7 @@ int write_raw(char *file_name, char *data, long file_size, bool overwrite){
     long written_size = fwrite(data, sizeof(char), file_size, f);
     fclose(f);
     if (file_size != written_size) return FILE_WRITE_ERROR;
-    return written_size;
+    return 0;
 }
 
 /*

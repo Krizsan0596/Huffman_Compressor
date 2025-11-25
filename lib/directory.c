@@ -7,6 +7,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <errno.h>
 
 long archive_directory(char *path, Directory_item **archive, int *current_index, int *archive_size) {
     DIR *directory = opendir(path);
@@ -22,7 +23,13 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
         strcat(newpath, "/");
         strcat(newpath, dir->d_name);
 
-        if (dir->d_type == DT_DIR) {
+        struct stat st;
+        if (stat(newpath, &st) != 0) {
+            free(newpath);
+            continue; // Could be a symlink or other special file, skip.
+        }
+
+        if (S_ISDIR(st.st_mode)) {
             Directory_item subdir = {0};
             subdir.is_dir = true;
             subdir.dir_path = strdup(newpath);
@@ -35,14 +42,15 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
                 return -2;
             }
             (*archive_size)++;
-            memcpy(&(*archive)[(*current_index)++], &subdir, sizeof(Directory_item));
-            int ret = archive_directory(newpath, archive, current_index, archive_size);
-            if (ret != 0) {
+            (*archive)[(*current_index)++] = subdir;
+            long subdir_size = archive_directory(newpath, archive, current_index, archive_size);
+            if (subdir_size < 0) {
                 free(newpath);
-                return ret;
+                return subdir_size;
             }
+            dir_size += subdir_size;
         } 
-        else if (dir->d_type == DT_REG) {
+        else if (S_ISREG(st.st_mode)) {
             Directory_item file = {0};
             file.is_dir = false;
             file.file_path = strdup(newpath);
@@ -62,7 +70,7 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
             }
 
             (*archive_size)++;
-            memcpy(&(*archive)[(*current_index)++], &file, sizeof(Directory_item));
+            (*archive)[(*current_index)++] = file;
         }
         free(newpath);
     }
@@ -119,14 +127,19 @@ int extract_directory(char *path, Directory_item *archive, int archive_size, boo
         strcat(full_path, "/");
         strcat(full_path, current->is_dir ? current->dir_path : current->file_path);
 
+        printf("Extracting %s\n", full_path);
         if (current->is_dir) {
-           if (mkdir(full_path, 0755) != 0) {
+           int ret = mkdir(full_path, 0755);
+           if (ret != 0) {
+               printf("mkdir failed for %s, errno: %d\n", full_path, errno);
                free(full_path);
                return -1;
            }
         }
         else {
-            if (write_raw(full_path, current->file_data, current->file_size, force) != 0) {
+            int ret = write_raw(full_path, current->file_data, current->file_size, force);
+            if (ret != 0) {
+                printf("write_raw failed for %s, return: %d\n", full_path, ret);
                 free(full_path);
                 return -2;
             }
@@ -151,7 +164,7 @@ int deserialize_archive(Directory_item **archive, char *buffer) {
             int n = end - current + 1;
             (*archive)[i].dir_path = malloc(n);
             if ((*archive)[i].dir_path == NULL) return MALLOC_ERROR;
-            memcpy(&(*archive)[i].dir_path, current, n);
+            memcpy((*archive)[i].dir_path, current, n);
             current += n;
         }
         else {
@@ -161,11 +174,11 @@ int deserialize_archive(Directory_item **archive, char *buffer) {
             int n = end - current + 1;
             (*archive)[i].file_path = malloc(n);
             if ((*archive)[i].file_path == NULL) return MALLOC_ERROR;
-            memcpy(&(*archive)[i].file_path, current, n);
+            memcpy((*archive)[i].file_path, current, n);
             current += n;
             (*archive)[i].file_data = malloc((*archive)[i].file_size);
             if ((*archive)[i].file_data == NULL) return -1;
-            memcpy(&(*archive)[i].file_data, current, (*archive)[i].file_size);
+            memcpy((*archive)[i].file_data, current, (*archive)[i].file_size);
             current += (*archive)[i].file_size;
         }
         i++;
