@@ -1,6 +1,7 @@
 #include "directory.h"
 #include "data_types.h"
 #include "file.h"
+#include "debugmalloc.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
@@ -26,7 +27,7 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
         struct stat st;
         if (stat(newpath, &st) != 0) {
             free(newpath);
-            continue; // Could be a symlink or other special file, skip.
+            continue;
         }
 
         if (S_ISDIR(st.st_mode)) {
@@ -66,6 +67,7 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
             else {
                 free(newpath);
                 free(file.file_path);
+                free(file.file_data);
                 return -2;
             }
 
@@ -120,31 +122,16 @@ long serialize_archive(Directory_item *archive, int archive_size, char **buffer)
 int extract_directory(char *path, Directory_item *archive, int archive_size, bool force) {
     for (int current_index = 0; current_index < archive_size; current_index++) {
         Directory_item *current = &archive[current_index];
-        char *full_path = malloc(strlen(path) + (current->is_dir ? strlen(current->dir_path) : strlen(current->file_path)) + 2);
-        if (full_path == NULL) return -1;
-        
-        strcpy(full_path, path);
-        strcat(full_path, "/");
-        strcat(full_path, current->is_dir ? current->dir_path : current->file_path);
+        char *full_path = current->is_dir ? current->dir_path : current->file_path;
 
-        printf("Extracting %s\n", full_path);
         if (current->is_dir) {
            int ret = mkdir(full_path, 0755);
-           if (ret != 0) {
-               printf("mkdir failed for %s, errno: %d\n", full_path, errno);
-               free(full_path);
-               return -1;
-           }
+           if (ret != 0) return -1;
         }
         else {
             int ret = write_raw(full_path, current->file_data, current->file_size, force);
-            if (ret != 0) {
-                printf("write_raw failed for %s, return: %d\n", full_path, ret);
-                free(full_path);
-                return -2;
-            }
+            if (ret != 0) return -2;
         }
-        free(full_path);
     }
     return 0;
 }
@@ -183,5 +170,5 @@ int deserialize_archive(Directory_item **archive, char *buffer) {
         }
         i++;
     }
-    return 0;
+    return archive_size;
 }

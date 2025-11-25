@@ -21,6 +21,16 @@ long get_file_size(FILE *f){
     return size;
 } 
 
+const char* get_unit(int *bytes) {
+    if (*bytes < 1024) return "B";
+    *bytes /= 1024;
+    if (*bytes < 1024) return "KB";
+    *bytes /= 1024;
+    if (*bytes < 1024) return "MB";
+    *bytes /= 1024;
+    return "GB";
+}
+
 /*
  * Beolvassa a fajlt memoriaba, a pointert a hivo adja meg.
  * Siker eseten a beolvasott bajtok szamat, hibakor negativ kodot ad vissza.
@@ -66,7 +76,7 @@ int write_raw(char *file_name, char *data, long file_size, bool overwrite){
     long written_size = fwrite(data, sizeof(char), file_size, f);
     fclose(f);
     if (file_size != written_size) return FILE_WRITE_ERROR;
-    return 0;
+    return written_size;
 }
 
 /*
@@ -203,7 +213,7 @@ int write_compressed(Compressed_file *compressed, bool overwrite) {
     }
     char *current = &data[0];
     for (int i = 0; i < 4; i++) {
-        data[i] = compressed->magic[i];
+        data[i] = magic[i];
     }
     current += 4;
     memcpy(current, &compressed->is_dir, sizeof(bool));
