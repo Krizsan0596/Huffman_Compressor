@@ -145,7 +145,7 @@ int extract_directory(char *path, Directory_item *archive, int archive_size, boo
         }
         else {
             int ret = write_raw(full_path, current->file_data, current->file_size, force);
-            if (ret != 0) return -2;
+            if (ret < 0) return -2;
         }
     }
     return 0;
