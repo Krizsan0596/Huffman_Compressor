@@ -4,6 +4,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include "../lib/file.h"
 #include "../lib/compress.h"
 #include "../lib/decompress.h"
@@ -153,8 +154,37 @@ int main(int argc, char* argv[]){
         int current_index = 0;
 
         if (directory) {
-            directory_size = archive_directory(input_file, &archive, &current_index, &archive_size);
+            char current_path[1000];
+            if (getcwd(current_path, sizeof(current_path)) == NULL) {
+                printf("Nem sikerult elmenteni az utat.");
+                return errno;
+            }
+            char *sep = strrchr(input_file, '/');
+            char *parent_dir = NULL;
+            char *file_name = NULL;
+            if (sep != NULL) {
+                int parent_dir_len = sep - input_file;
+                parent_dir = malloc(parent_dir_len + 1);
+                strncpy(parent_dir, input_file, parent_dir_len);
+                parent_dir[parent_dir_len] = '\0';
+                file_name = malloc(strlen(input_file) - parent_dir_len + 1);
+                strncpy(file_name, sep + 1, strlen(input_file) - parent_dir_len);
+                file_name[strlen(input_file) - parent_dir_len] = '\0';
+                if (chdir(parent_dir) != 0) {
+                    printf("Nem sikerult belepni a mappaba.");
+                    return errno;
+                }
+            }
+            directory_size = archive_directory((sep != NULL) ? file_name : input_file, &archive, &current_index, &archive_size);
             data_len = serialize_archive(archive, archive_size, &data);
+            if (sep != NULL) {
+                if (chdir(current_path) != 0) {
+                    printf("Nem sikerult kilepni a mappaba.");
+                    return errno;
+                }
+            }
+            free(parent_dir);
+            free(file_name);
         }
         else {
             data_len = read_raw(input_file, &data);
@@ -266,7 +296,9 @@ int main(int argc, char* argv[]){
             printf("Tomorites kesz.\n"
                     "Eredeti meret:    %d%s\n"
                     "Tomoritett meret: %d%s\n"
-                    "Tomorites aranya: %.2f%%", data_len, get_unit(&data_len), write_res, get_unit(&write_res), (double)write_res/(directory ? directory_size : data_len) * 100);
+                    "Tomorites aranya: %.2f%%", data_len, get_unit(&data_len), 
+                                                write_res, get_unit(&write_res), 
+                                                (double)write_res/(directory ? directory_size : data_len) * 100);
         }
         free(frequencies);
         if (output_generated) free(output_file);
@@ -298,7 +330,7 @@ int main(int argc, char* argv[]){
      */
     } else if (extract_mode) {
         Compressed_file *compressed_file;
-        char *raw_data;
+        char *raw_data = NULL;
         int res = 0;
         while (true) {
             compressed_file = calloc(1, sizeof(Compressed_file));
@@ -319,6 +351,9 @@ int main(int argc, char* argv[]){
                 res = EIO;
                 break;
             }
+
+            // A fajlbol beolvassa hogy mappa volt e tomoritve.
+            directory = compressed_file->is_dir;
             
             if (compressed_file->original_size <= 0) {
                 printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.", input_file);
@@ -339,15 +374,29 @@ int main(int argc, char* argv[]){
                 res = EIO;
                 break;
             }
-            
-            Directory_item *archive;
+
+            Directory_item *archive = NULL;
+            int archive_size = 0;
             if (directory) {
-                int archive_size = deserialize_archive(&archive, raw_data);
-                int ret = extract_directory(output_file, archive, archive_size, force);
-                if (ret != 0) {
+                archive_size = deserialize_archive(&archive, raw_data);
+                if (archive_size < 0) {
                     res = EIO;
-                    break;
+                } else {
+                    int ret = extract_directory(output_file, archive, archive_size, force);
+                    if (ret != 0) {
+                        res = EIO;
+                    }
                 }
+                for (int i = 0; i < archive_size; ++i) {
+                    if (archive[i].is_dir) {
+                        free(archive[i].dir_path);
+                    } else {
+                        free(archive[i].file_path);
+                        free(archive[i].file_data);
+                    }
+                }
+                free(archive);
+                if (res != 0) break;
             }
 
             else {
