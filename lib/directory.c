@@ -11,6 +11,21 @@
 #include <errno.h>
 
 long archive_directory(char *path, Directory_item **archive, int *current_index, int *archive_size) {
+    if (*current_index == 0) {
+        Directory_item root = {0};
+        root.is_dir = true;
+        root.dir_path = strdup(path);
+        if (root.dir_path == NULL) return -1;
+        Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
+        if (temp != NULL) *archive = temp;
+        else {
+            free(root.dir_path);
+            return -2;
+        }
+        (*archive_size)++;
+        (*archive)[(*current_index)++] = root;
+    }
+
     DIR *directory = opendir(path);
     if (directory == NULL) return -1;
     long dir_size = 0;
@@ -126,7 +141,7 @@ int extract_directory(char *path, Directory_item *archive, int archive_size, boo
 
         if (current->is_dir) {
            int ret = mkdir(full_path, 0755);
-           if (ret != 0) return -1;
+           if (ret != 0 && errno != EEXIST) return -1;
         }
         else {
             int ret = write_raw(full_path, current->file_data, current->file_size, force);
