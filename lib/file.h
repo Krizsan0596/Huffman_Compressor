@@ -9,5 +9,6 @@ int write_raw(char file_name[], char* data, long file_size, bool overwrite);
 int read_compressed(char file_name[], Compressed_file *compressed);
 int write_compressed(Compressed_file *compressed, bool overwrite); 
 long get_file_size(FILE* f);
+const char* get_unit(int *bytes);
 
 #endif

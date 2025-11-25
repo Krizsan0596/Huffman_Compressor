@@ -136,9 +136,9 @@ int main(int argc, char* argv[]){
     
     if (compress_mode) {
         // Ha nem adott meg kimeneti fajt a felhasznalo, general egyet.
-        bool output_default = false;
+        bool output_generated = false;
         if (output_file == NULL) {
-            output_default = true;
+            output_generated = true;
             output_file = generate_output_file(input_file);
             if (output_file == NULL) {
                 printf("Nem sikerult lefoglalni a memoriat.");
@@ -148,11 +148,12 @@ int main(int argc, char* argv[]){
         char *data;
         int data_len;
         int directory_size;
-        Directory_item *archive;
+        Directory_item *archive = NULL;
         int archive_size = 0;
+        int current_index = 0;
 
         if (directory) {
-            directory_size = archive_directory(input_file, &archive, 0, &archive_size);
+            directory_size = archive_directory(input_file, &archive, &current_index, &archive_size);
             data_len = serialize_archive(archive, archive_size, &data);
         }
         else {
@@ -175,6 +176,7 @@ int main(int argc, char* argv[]){
             // Megszamolja a bemeneti adat bajtjainak gyakorisagat.
             frequencies = calloc(256, sizeof(long));
             if (frequencies == NULL) {
+                printf("Nem sikerult lefoglalni a memoriat.");
                 res = MALLOC_ERROR;
                 break;
             }
@@ -188,8 +190,6 @@ int main(int argc, char* argv[]){
             }
 
             if (leaf_count == 0) {
-                free(data);
-                free(frequencies);
                 printf("A fajl (%s) ures.", input_file);
                 res = SUCCESS;
                 break;
@@ -197,6 +197,7 @@ int main(int argc, char* argv[]){
 
             nodes = malloc((2 * leaf_count - 1) * sizeof(Node));
             if (nodes == NULL) {
+                printf("Nem sikerult lefoglalni a memoriat.");
                 res = MALLOC_ERROR;
                 break;
             }
@@ -223,6 +224,7 @@ int main(int argc, char* argv[]){
             }
             cache = calloc(256, sizeof(char *));
             if (cache == NULL) {
+                printf("Nem sikerult lefoglalni a memoriat.");
                 res = MALLOC_ERROR;
                 break;
             }
@@ -248,12 +250,7 @@ int main(int argc, char* argv[]){
         compressed_file->huffman_tree = nodes;
         compressed_file->tree_size = tree_size * sizeof(Node);
         compressed_file->original_file = input_file;
-        if (directory) {
-            compressed_file->original_size = archive_size;
-        }
-        else {
-            compressed_file->original_size = data_len;
-        }
+        compressed_file->original_size = data_len;
         compressed_file->file_name = output_file;
         int write_res = write_compressed(compressed_file, force);
         if (write_res < 0) {
@@ -265,6 +262,34 @@ int main(int argc, char* argv[]){
                 write_res = EIO;
             }
         }
+        else {
+            printf("Tomorites kesz.\n"
+                    "Eredeti meret:    %d%s\n"
+                    "Tomoritett meret: %d%s\n"
+                    "Tomorites aranya: %.2f%%", data_len, get_unit(&data_len), write_res, get_unit(&write_res), (double)write_res/(directory ? directory_size : data_len) * 100);
+        }
+        free(frequencies);
+        if (output_generated) free(output_file);
+        free(nodes);
+        free(compressed_file->compressed_data);
+
+        for (int i = 0; i < 256; ++i) {
+            if (cache[i] != NULL) {
+                free(cache[i]);
+            }
+        }
+        free(cache);
+        free(data);
+        free(compressed_file);
+        for (int i = 0; i < archive_size; ++i) {
+            if (archive[i].is_dir) {
+                free(archive[i].dir_path);
+            } else {
+                free(archive[i].file_path);
+                free(archive[i].file_data);
+            }
+        }
+        free(archive);
         return res;
 
     /*
@@ -317,17 +342,21 @@ int main(int argc, char* argv[]){
             
             Directory_item *archive;
             if (directory) {
-                deserialize_archive(&archive, raw_data);
-                int ret = extract_directory(output_file, archive, compressed_file->original_size, force);
-                if (ret == 0) return 0;
-                else return EIO;
+                int archive_size = deserialize_archive(&archive, raw_data);
+                int ret = extract_directory(output_file, archive, archive_size, force);
+                if (ret != 0) {
+                    res = EIO;
+                    break;
+                }
             }
 
-            int write_res = write_raw(output_file != NULL ? output_file : compressed_file->original_file, raw_data, compressed_file->original_size, force);
-            if (write_res < 0) {
-                printf("Hiba tortent a kimeneti fajl (%s) irasa kozben. \n", output_file != NULL ? output_file : compressed_file->original_file);
-                res = EIO;
-                break;
+            else {
+                int write_res = write_raw(output_file != NULL ? output_file : compressed_file->original_file, raw_data, compressed_file->original_size, force);
+                if (write_res < 0) {
+                    printf("Hiba tortent a kimeneti fajl (%s) irasa kozben. \n", output_file != NULL ? output_file : compressed_file->original_file);
+                    res = EIO;
+                    break;
+                }
             }
             break;
         }
