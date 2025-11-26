@@ -116,7 +116,7 @@ int main(int argc, char* argv[]){
         struct stat st;
         int ret = stat(input_file, &st);
         if (ret != 0) {
-            printf("Nem sikerult ellenorizni a mappat.");
+            printf("Nem sikerult ellenorizni a mappat.\n");
             return ret;
         }
         else if (S_ISREG(st.st_mode)) directory = false;
@@ -125,11 +125,11 @@ int main(int argc, char* argv[]){
         struct stat st;
     int ret = stat(input_file, &st);
         if (ret != 0) {
-            printf("Nem sikerult ellenorizni a fajlt.");
+            printf("Nem sikerult ellenorizni a fajlt.\n");
             return ret;
         }
         else if (S_ISDIR(st.st_mode)) {
-            printf("Az -r kapcsolo nelkul nem tomorit mappat a program.");
+            printf("Az -r kapcsolo nelkul nem tomorit mappat a program.\n");
             print_usage(argv[0]);
             return EISDIR;
         }
@@ -142,7 +142,7 @@ int main(int argc, char* argv[]){
             output_generated = true;
             output_file = generate_output_file(input_file);
             if (output_file == NULL) {
-                printf("Nem sikerult lefoglalni a memoriat.");
+                printf("Nem sikerult lefoglalni a memoriat.\n");
                 return ENOMEM;
             }
         }
@@ -156,7 +156,7 @@ int main(int argc, char* argv[]){
         if (directory) {
             char current_path[1000];
             if (getcwd(current_path, sizeof(current_path)) == NULL) {
-                printf("Nem sikerult elmenteni az utat.");
+                printf("Nem sikerult elmenteni az utat.\n");
                 return errno;
             }
             char *sep = strrchr(input_file, '/');
@@ -171,15 +171,37 @@ int main(int argc, char* argv[]){
                 strncpy(file_name, sep + 1, strlen(input_file) - parent_dir_len);
                 file_name[strlen(input_file) - parent_dir_len] = '\0';
                 if (chdir(parent_dir) != 0) {
-                    printf("Nem sikerult belepni a mappaba.");
+                    printf("Nem sikerult belepni a mappaba.\n");
                     return errno;
                 }
             }
             directory_size = archive_directory((sep != NULL) ? file_name : input_file, &archive, &current_index, &archive_size);
+            if (directory_size < 0) {
+                if (directory_size == MALLOC_ERROR) {
+                    printf("Nem sikerult lefoglalni a memoriat a mappa archivallasakor.\n");
+                } else if (directory_size == DIRECTORY_OPEN_ERROR) {
+                    printf("Nem sikerult megnyitni a mappat.\n");
+                } else if (directory_size == FILE_READ_ERROR) {
+                    printf("Nem sikerult beolvasni egy fajlt a mappabol.\n");
+                } else {
+                    printf("Nem sikerult a mappa archivallasa.\n");
+                }
+                return directory_size;
+            }
             data_len = serialize_archive(archive, archive_size, &data);
+            if (data_len < 0) {
+                if (data_len == MALLOC_ERROR) {
+                    printf("Nem sikerult lefoglalni a memoriat a szerializalaskor.\n");
+                } else if (data_len == EMPTY_DIRECTORY) {
+                    printf("A mappa ures.\n");
+                } else {
+                    printf("Nem sikerult a mappa szerializalasa.\n");
+                }
+                return data_len;
+            }
             if (sep != NULL) {
                 if (chdir(current_path) != 0) {
-                    printf("Nem sikerult kilepni a mappaba.");
+                    printf("Nem sikerult kilepni a mappaba.\n");
                     return errno;
                 }
             }
@@ -189,7 +211,7 @@ int main(int argc, char* argv[]){
         else {
             data_len = read_raw(input_file, &data);
             if (data_len < 0) {
-                printf("Nem sikerult megnyitni a fajlt (%s).", input_file);
+                printf("Nem sikerult megnyitni a fajlt (%s).\n", input_file);
                 return EIO;
             }
         }
@@ -206,7 +228,7 @@ int main(int argc, char* argv[]){
             // Megszamolja a bemeneti adat bajtjainak gyakorisagat.
             frequencies = calloc(256, sizeof(long));
             if (frequencies == NULL) {
-                printf("Nem sikerult lefoglalni a memoriat.");
+                printf("Nem sikerult lefoglalni a memoriat.\n");
                 res = MALLOC_ERROR;
                 break;
             }
@@ -220,14 +242,14 @@ int main(int argc, char* argv[]){
             }
 
             if (leaf_count == 0) {
-                printf("A fajl (%s) ures.", input_file);
+                printf("A fajl (%s) ures.\n", input_file);
                 res = SUCCESS;
                 break;
             }
 
             nodes = malloc((2 * leaf_count - 1) * sizeof(Node));
             if (nodes == NULL) {
-                printf("Nem sikerult lefoglalni a memoriat.");
+                printf("Nem sikerult lefoglalni a memoriat.\n");
                 res = MALLOC_ERROR;
                 break;
             }
@@ -249,18 +271,20 @@ int main(int argc, char* argv[]){
             if (root_node != NULL) {
                 tree_size = (root_node - nodes) + 1;
             } else {
+                printf("Nem sikerult a Huffman fa felepitese.\n");
                 res = TREE_ERROR;
                 break;
             }
             cache = calloc(256, sizeof(char *));
             if (cache == NULL) {
-                printf("Nem sikerult lefoglalni a memoriat.");
+                printf("Nem sikerult lefoglalni a memoriat.\n");
                 res = MALLOC_ERROR;
                 break;
             }
 
             compressed_file = malloc(sizeof(Compressed_file));
             if (compressed_file == NULL) {
+                printf("Nem sikerult lefoglalni a memoriat.\n");
                 res = MALLOC_ERROR;
                 break;
             }
@@ -268,6 +292,7 @@ int main(int argc, char* argv[]){
             // Tomoriti a beolvasott adatokat a compressed_file strukturaba.
             int compress_res = compress(data, data_len, nodes, root_node, cache, compressed_file);
             if (compress_res != 0) {
+                printf("Nem sikerult a tomorites.\n");
                 res = compress_res;
                 break;
             }
@@ -296,7 +321,7 @@ int main(int argc, char* argv[]){
             printf("Tomorites kesz.\n"
                     "Eredeti meret:    %d%s\n"
                     "Tomoritett meret: %d%s\n"
-                    "Tomorites aranya: %.2f%%", data_len, get_unit(&data_len), 
+                    "Tomorites aranya: %.2f%%\n", data_len, get_unit(&data_len), 
                                                 write_res, get_unit(&write_res), 
                                                 (double)write_res/(directory ? directory_size : data_len) * 100);
         }
@@ -335,7 +360,7 @@ int main(int argc, char* argv[]){
         while (true) {
             compressed_file = calloc(1, sizeof(Compressed_file));
             if (compressed_file == NULL) {
-                printf("Nem sikerult lefoglalni a memoriat.");
+                printf("Nem sikerult lefoglalni a memoriat.\n");
                 res = ENOMEM;
                 break;
             }
@@ -343,11 +368,11 @@ int main(int argc, char* argv[]){
             int read_res = read_compressed(input_file, compressed_file);
             if (read_res != 0) {
                 if (read_res == FILE_MAGIC_ERROR) {
-                    printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.", input_file);
+                    printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.\n", input_file);
                     res = EBADF;
                     break;
                 }
-                printf("Nem sikerult beolvasni a tomoritett fajlt (%s).", input_file);
+                printf("Nem sikerult beolvasni a tomoritett fajlt (%s).\n", input_file);
                 res = EIO;
                 break;
             }
@@ -356,21 +381,21 @@ int main(int argc, char* argv[]){
             directory = compressed_file->is_dir;
             
             if (compressed_file->original_size <= 0) {
-                printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.", input_file);
+                printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.\n", input_file);
                 res = EINVAL;
                 break;
             }
             
             raw_data = malloc(compressed_file->original_size * sizeof(char));
             if (raw_data == NULL) {
-                printf("Nem sikerult lefoglalni a memoriat.");
+                printf("Nem sikerult lefoglalni a memoriat.\n");
                 res = ENOMEM;
                 break;
             }
             
             int decompress_result = decompress(compressed_file, raw_data);
             if (decompress_result != 0) {
-                printf("Nem sikerult a kitomorites. ");
+                printf("Nem sikerult a kitomorites.\n");
                 res = EIO;
                 break;
             }
@@ -380,10 +405,22 @@ int main(int argc, char* argv[]){
             if (directory) {
                 archive_size = deserialize_archive(&archive, raw_data);
                 if (archive_size < 0) {
+                    if (archive_size == MALLOC_ERROR) {
+                        printf("Nem sikerult lefoglalni a memoriat a deszerializalaskor.\n");
+                    } else {
+                        printf("Nem sikerult a mappa deszerializalasa.\n");
+                    }
                     res = EIO;
                 } else {
                     int ret = extract_directory(output_file, archive, archive_size, force);
                     if (ret != 0) {
+                        if (ret == MKDIR_ERROR) {
+                            printf("Nem sikerult letrehozni egy mappat a kitomoriteskor.\n");
+                        } else if (ret == FILE_WRITE_ERROR) {
+                            printf("Nem sikerult kiirni egy fajlt a kitomoriteskor.\n");
+                        } else {
+                            printf("Nem sikerult a mappa kitomoritese.\n");
+                        }
                         res = EIO;
                     }
                 }
@@ -402,7 +439,7 @@ int main(int argc, char* argv[]){
             else {
                 int write_res = write_raw(output_file != NULL ? output_file : compressed_file->original_file, raw_data, compressed_file->original_size, force);
                 if (write_res < 0) {
-                    printf("Hiba tortent a kimeneti fajl (%s) irasa kozben. \n", output_file != NULL ? output_file : compressed_file->original_file);
+                    printf("Hiba tortent a kimeneti fajl (%s) irasa kozben.\n", output_file != NULL ? output_file : compressed_file->original_file);
                     res = EIO;
                     break;
                 }
@@ -418,7 +455,7 @@ int main(int argc, char* argv[]){
         return res;
     } 
     else {
-        printf("Az egyik modot (-c vagy -x) meg kell adni.");
+        printf("Az egyik modot (-c vagy -x) meg kell adni.\n");
         print_usage(argv[0]);
         return EINVAL;
     }
