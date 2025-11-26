@@ -27,7 +27,7 @@ static void print_usage(const char *prog_name) {
         "\t-o KIMENETI_FAJL  Kimeneti fajl megadasa (opcionalis).\n"
         "\t-h                Kiirja ezt az utmutatot.\n"
         "\t-f                Ha letezik a KIMENETI_FAJL, kerdes nelkul felulirja.\n"
-        "\t-r                Rekurzivan egy megadott mappat tomorit.\n"
+        "\t-r                Rekurzivan egy megadott mappat tomorit (csak tomoriteskor szukseges).\n"
         "\tBEMENETI_FAJL: A tomoritendo vagy visszaallitando fajl utvonala.\n"
         "\tA -c es -x kapcsolok kizarjak egymast.";
 
@@ -406,23 +406,31 @@ int main(int argc, char* argv[]){
                 archive_size = deserialize_archive(&archive, raw_data);
                 if (archive_size < 0) {
                     if (archive_size == MALLOC_ERROR) {
-                        printf("Nem sikerult lefoglalni a memoriat a deszerializalaskor.\n");
+                        printf("Nem sikerult lefoglalni a memoriat a beolvasaskor.\n");
                     } else {
-                        printf("Nem sikerult a mappa deszerializalasa.\n");
+                        printf("Nem sikerult a tomoritett mappa beolvasasa.\n");
                     }
                     res = EIO;
-                } else {
-                    int ret = extract_directory(output_file, archive, archive_size, force);
-                    if (ret != 0) {
-                        if (ret == MKDIR_ERROR) {
-                            printf("Nem sikerult letrehozni egy mappat a kitomoriteskor.\n");
-                        } else if (ret == FILE_WRITE_ERROR) {
-                            printf("Nem sikerult kiirni egy fajlt a kitomoriteskor.\n");
-                        } else {
-                            printf("Nem sikerult a mappa kitomoritese.\n");
-                        }
+                    break;
+                } 
+                if (output_file != NULL) {
+                    if (mkdir(output_file, 0755) != 0 && errno != EEXIST) {
+                        printf("Nem sikerult letrehozni a kimeneti mappat.\n");
                         res = EIO;
+                        break;
                     }
+                }
+                int ret = extract_directory(output_file != NULL ? output_file : ".", archive, archive_size, force);
+                if (ret != 0) {
+                    if (ret == MKDIR_ERROR) {
+                        printf("Nem sikerult letrehozni egy mappat a kitomoriteskor.\n");
+                    } else if (ret == FILE_WRITE_ERROR) {
+                        printf("Nem sikerult kiirni egy fajlt a kitomoriteskor.\n");
+                    } else {
+                        printf("Nem sikerult a mappa kitomoritese.\n");
+                    }
+                    res = EIO;
+                    break;
                 }
                 for (int i = 0; i < archive_size; ++i) {
                     if (archive[i].is_dir) {

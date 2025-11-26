@@ -135,10 +135,15 @@ long serialize_archive(Directory_item *archive, int archive_size, char **buffer)
 
 
 int extract_directory(char *path, Directory_item *archive, int archive_size, bool force) {
+    if (path == NULL) path = ".";
     for (int current_index = 0; current_index < archive_size; current_index++) {
         Directory_item *current = &archive[current_index];
-        char *full_path = current->is_dir ? current->dir_path : current->file_path;
-
+        char *item_path = current->is_dir ? current->dir_path : current->file_path;
+        char *full_path = malloc(strlen(path) + strlen(item_path) + 2);
+        if (full_path == NULL) return MALLOC_ERROR;
+        strcpy(full_path, path);
+        strcat(full_path, "/");
+        strcat(full_path, item_path);
         if (current->is_dir) {
            int ret = mkdir(full_path, 0755);
            if (ret != 0 && errno != EEXIST) return MKDIR_ERROR;
@@ -147,6 +152,7 @@ int extract_directory(char *path, Directory_item *archive, int archive_size, boo
             int ret = write_raw(full_path, current->file_data, current->file_size, force);
             if (ret < 0) return FILE_WRITE_ERROR;
         }
+        free(full_path);
     }
     return SUCCESS;
 }
