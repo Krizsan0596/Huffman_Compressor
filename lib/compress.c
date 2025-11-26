@@ -257,7 +257,7 @@ int run_compression(char *input_file, char *output_file, char *data, int data_le
         if (leaf_count == 0) {
             free(data);
             free(frequencies);
-            printf("A fajl (%s) ures.", input_file);
+            printf("A fajl (%s) ures.\n", input_file);
             res = SUCCESS;
             break;
         }

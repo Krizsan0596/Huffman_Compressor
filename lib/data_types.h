@@ -58,7 +58,10 @@ typedef enum {
     DECOMPRESSION_ERROR = -6,
     COMPRESSION_ERROR = -7,
     NO_OVERWRITE = -8,
-    SCANF_FAILED = -9
+    SCANF_FAILED = -9,
+    DIRECTORY_OPEN_ERROR = -10,
+    EMPTY_DIRECTORY = -11,
+    MKDIR_ERROR = -12
 } ErrorCode;
 
 typedef struct {

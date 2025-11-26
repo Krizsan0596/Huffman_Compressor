@@ -15,26 +15,26 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
         Directory_item root = {0};
         root.is_dir = true;
         root.dir_path = strdup(path);
-        if (root.dir_path == NULL) return -1;
+        if (root.dir_path == NULL) return MALLOC_ERROR;
         Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
         if (temp != NULL) *archive = temp;
         else {
             free(root.dir_path);
-            return -2;
+            return MALLOC_ERROR;
         }
         (*archive_size)++;
         (*archive)[(*current_index)++] = root;
     }
 
     DIR *directory = opendir(path);
-    if (directory == NULL) return -1;
+    if (directory == NULL) return DIRECTORY_OPEN_ERROR;
     long dir_size = 0;
     while (true) {
         struct dirent *dir = readdir(directory);
         if (dir == NULL) break;
         else if (strcmp(dir->d_name, ".") == 0 || strcmp(dir->d_name, "..") == 0) continue;
         char *newpath = malloc(strlen(path) + strlen(dir->d_name) + 2);
-        if (newpath == NULL) return -1;
+        if (newpath == NULL) return MALLOC_ERROR;
         strcpy(newpath, path);
         strcat(newpath, "/");
         strcat(newpath, dir->d_name);
@@ -49,13 +49,13 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
             Directory_item subdir = {0};
             subdir.is_dir = true;
             subdir.dir_path = strdup(newpath);
-            if (subdir.dir_path == NULL) return -1;
+            if (subdir.dir_path == NULL) return MALLOC_ERROR;
             Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
             if (temp != NULL) *archive = temp;
             else {
                 free(newpath);
                 free(subdir.dir_path);
-                return -2;
+                return MALLOC_ERROR;
             }
             (*archive_size)++;
             (*archive)[(*current_index)++] = subdir;
@@ -70,12 +70,12 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
             Directory_item file = {0};
             file.is_dir = false;
             file.file_path = strdup(newpath);
-            if (file.file_path == NULL) return -1;
+            if (file.file_path == NULL) return MALLOC_ERROR;
             file.file_size = read_raw(newpath, &file.file_data);
             dir_size += file.file_size;
             if (file.file_size < 0) {
                 free(file.file_path);
-                return -3;
+                return FILE_READ_ERROR;
             } 
             Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
             if (temp != NULL) *archive = temp;
@@ -83,7 +83,7 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
                 free(newpath);
                 free(file.file_path);
                 free(file.file_data);
-                return -2;
+                return MALLOC_ERROR;
             }
 
             (*archive_size)++;
@@ -96,7 +96,7 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
 }
 
 long serialize_archive(Directory_item *archive, int archive_size, char **buffer) {
-    if (archive_size == 0) return -2; // empty dir
+    if (archive_size == 0) return EMPTY_DIRECTORY;
     int data_size = sizeof(int);
     for (int i = 0; i < archive_size; i++) {
         data_size += sizeof(bool);
@@ -110,7 +110,7 @@ long serialize_archive(Directory_item *archive, int archive_size, char **buffer)
         }
     }
     *buffer = malloc(data_size);
-    if (*buffer == NULL) return -1; // malloc error
+    if (*buffer == NULL) return MALLOC_ERROR;
     char *current = *buffer;
     memcpy(current, &archive_size, sizeof(int));
     current += sizeof(int);
@@ -141,14 +141,14 @@ int extract_directory(char *path, Directory_item *archive, int archive_size, boo
 
         if (current->is_dir) {
            int ret = mkdir(full_path, 0755);
-           if (ret != 0 && errno != EEXIST) return -1;
+           if (ret != 0 && errno != EEXIST) return MKDIR_ERROR;
         }
         else {
             int ret = write_raw(full_path, current->file_data, current->file_size, force);
-            if (ret < 0) return -2;
+            if (ret < 0) return FILE_WRITE_ERROR;
         }
     }
-    return 0;
+    return SUCCESS;
 }
 
 int deserialize_archive(Directory_item **archive, char *buffer) {
@@ -179,7 +179,7 @@ int deserialize_archive(Directory_item **archive, char *buffer) {
             memcpy((*archive)[i].file_path, current, n);
             current += n;
             (*archive)[i].file_data = malloc((*archive)[i].file_size);
-            if ((*archive)[i].file_data == NULL) return -1;
+            if ((*archive)[i].file_data == NULL) return MALLOC_ERROR;
             memcpy((*archive)[i].file_data, current, (*archive)[i].file_size);
             current += (*archive)[i].file_size;
         }
