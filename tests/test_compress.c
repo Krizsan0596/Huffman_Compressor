@@ -80,7 +80,9 @@ static void test_compress_zero_length(void) {
     assert(cache != NULL);
 
     Compressed_file compressed = {0};
+    (void)dummy_nodes;
     assert(compress("", 0, dummy_nodes, &dummy_nodes[0], cache, &compressed) == 0);
+    (void)compressed;
     assert(compressed.data_size == 0);
     assert(compressed.compressed_data == NULL);
 
