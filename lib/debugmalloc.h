@@ -206,7 +206,7 @@ static void debugmalloc_dump_memory(char const *mem, size_t size) {
         pos += sprintf(line + pos, "      %04x  ", y * 16);
         for (unsigned x = 0; x < 16; x++) {
             if (y * 16 + x < size)
-                pos += sprintf(line + pos, "%02x ", mem[y * 16 + x]);
+                pos += sprintf(line + pos, "%02x ", (unsigned char)mem[y * 16 + x]);
             else
                 pos += sprintf(line + pos, "   ");
         }
