@@ -147,8 +147,8 @@ int main(int argc, char* argv[]){
             }
         }
         char *data;
-        int data_len;
-        int directory_size;
+        int data_len = 0;
+        int directory_size = 0;
         Directory_item *archive = NULL;
         int archive_size = 0;
         int current_index = 0;
@@ -216,11 +216,11 @@ int main(int argc, char* argv[]){
             }
         }
         
-        long *frequencies;
-        Compressed_file *compressed_file;
-        Node *nodes;
-        long tree_size;
-        char **cache;
+        long *frequencies = NULL;
+        Compressed_file *compressed_file = NULL;
+        Node *nodes = NULL;
+        long tree_size = 0;
+        char **cache = NULL;
         int res = 0;
         
         // A while ciklusbol a vegen garantaltan ki break-elunk, de ha hiba tortenik, akkor a vegere ugrunk.
