@@ -117,8 +117,14 @@ static DebugmallocData * debugmalloc_singleton(void) {
 
 /* better version of strncpy, always terminates string with \0. */
 static void debugmalloc_strlcpy(char *dest, char const *src, size_t destsize) {
-    strncpy(dest, src, destsize-1); /* 03.09.2025 by KZs: destsize changed to destsize-1 according to warnings*/
-    dest[destsize - 1] = '\0';
+    /* avoid strncpy truncation warning on newer GCC; copy up to space-1 manually */
+    if (destsize == 0)
+        return;
+    size_t len = strlen(src);
+    if (len >= destsize)
+        len = destsize - 1;
+    memcpy(dest, src, len);
+    dest[len] = '\0';
 }
 
 

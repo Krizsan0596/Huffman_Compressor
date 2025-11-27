@@ -62,8 +62,7 @@ static void test_compress_basic_pattern(void) {
     assert(cache != NULL);
 
     Compressed_file compressed = {0};
-    int res = compress((char *)input, len, nodes, root, cache, &compressed);
-    assert(res == 0);
+    assert(compress((char *)input, len, nodes, root, cache, &compressed) == 0);
     assert(compressed.data_size == 6);          // 6 characters encoded with 1 bit per symbol
     assert(compressed.compressed_data != NULL);
     assert(compressed.compressed_data[0] == (char)0xF0);
@@ -81,8 +80,7 @@ static void test_compress_zero_length(void) {
     assert(cache != NULL);
 
     Compressed_file compressed = {0};
-    int res = compress("", 0, dummy_nodes, &dummy_nodes[0], cache, &compressed);
-    assert(res == 0);
+    assert(compress("", 0, dummy_nodes, &dummy_nodes[0], cache, &compressed) == 0);
     assert(compressed.data_size == 0);
     assert(compressed.compressed_data == NULL);
 

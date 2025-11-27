@@ -24,13 +24,15 @@ void test_file_io() {
     original_data.file_name = strdup("test.huf");
 
     // 2. Action
-    int write_result = write_compressed(&original_data, true);
-    assert(write_result >= 0);
+    assert(write_compressed(&original_data, true) >= 0);
 
     // 3. Verification
-    Compressed_file read_data;
-    int read_result = read_compressed("test.huf", &read_data);
-    assert(read_result == 0);
+    Compressed_file read_data = {0};
+    read_data.original_file = NULL;
+    read_data.huffman_tree = NULL;
+    read_data.compressed_data = NULL;
+    read_data.file_name = NULL;
+    assert(read_compressed("test.huf", &read_data) == 0);
 
     assert(original_data.original_size == read_data.original_size);
     assert(strcmp(original_data.original_file, read_data.original_file) == 0);
