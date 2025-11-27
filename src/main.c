@@ -331,6 +331,7 @@ int main(int argc, char* argv[]){
         free(nodes);
         if (compressed_file != NULL) {
             free(compressed_file->compressed_data);
+            free(compressed_file);
         }
 
         for (int i = 0; i < 256; ++i) {
@@ -340,7 +341,6 @@ int main(int argc, char* argv[]){
         }
         free(cache);
         free(data);
-        free(compressed_file);
         for (int i = 0; i < archive_size; ++i) {
             if (archive[i].is_dir) {
                 free(archive[i].dir_path);
