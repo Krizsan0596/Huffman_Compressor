@@ -215,7 +215,8 @@ int main(int argc, char* argv[]){
                 return EIO;
             }
         }
-        
+
+        int write_res = 0;
         long *frequencies = NULL;
         Compressed_file *compressed_file = NULL;
         Node *nodes = NULL;
@@ -296,34 +297,34 @@ int main(int argc, char* argv[]){
                 res = compress_res;
                 break;
             }
-            break;
-        }
 
-        if (directory) compressed_file->is_dir = true;
-        else compressed_file->is_dir = false;
+            if (directory) compressed_file->is_dir = true;
+            else compressed_file->is_dir = false;
 
-        compressed_file->huffman_tree = nodes;
-        compressed_file->tree_size = tree_size * sizeof(Node);
-        compressed_file->original_file = input_file;
-        compressed_file->original_size = data_len;
-        compressed_file->file_name = output_file;
-        int write_res = write_compressed(compressed_file, force);
-        if (write_res < 0) {
-            if (write_res == NO_OVERWRITE) {
-                printf("A fajlt nem irtam felul, nem tortent meg a tomorites.\n");
-                write_res = ECANCELED;
-            } else {
-                printf("Nem sikerult kiirni a kimeneti fajlt (%s).\n", compressed_file->file_name);
-                write_res = EIO;
+            compressed_file->huffman_tree = nodes;
+            compressed_file->tree_size = tree_size * sizeof(Node);
+            compressed_file->original_file = input_file;
+            compressed_file->original_size = data_len;
+            compressed_file->file_name = output_file;
+            write_res = write_compressed(compressed_file, force);
+            if (write_res < 0) {
+                if (write_res == NO_OVERWRITE) {
+                    printf("A fajlt nem irtam felul, nem tortent meg a tomorites.\n");
+                    write_res = ECANCELED;
+                } else {
+                    printf("Nem sikerult kiirni a kimeneti fajlt (%s).\n", compressed_file->file_name);
+                    write_res = EIO;
+                }
             }
-        }
-        else {
-            printf("Tomorites kesz.\n"
-                    "Eredeti meret:    %d%s\n"
-                    "Tomoritett meret: %d%s\n"
-                    "Tomorites aranya: %.2f%%\n", data_len, get_unit(&data_len), 
-                                                write_res, get_unit(&write_res), 
-                                                (double)write_res/(directory ? directory_size : data_len) * 100);
+            else {
+                printf("Tomorites kesz.\n"
+                        "Eredeti meret:    %d%s\n"
+                        "Tomoritett meret: %d%s\n"
+                        "Tomorites aranya: %.2f%%\n", data_len, get_unit(&data_len), 
+                                                    write_res, get_unit(&write_res), 
+                                                    (double)write_res/(directory ? directory_size : data_len) * 100);
+            }
+            break;
         }
         free(frequencies);
         if (output_generated) free(output_file);
