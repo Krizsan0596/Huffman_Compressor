@@ -107,7 +107,7 @@ int read_compressed(char file_name[], Compressed_file *compressed){
             break;
         }
 
-        if (fread(&compressed->is_dir, sizeof(bool), 1, f) != sizeof(bool)) {
+        if (fread(&compressed->is_dir, sizeof(bool), 1, f) != 1) {
             ret = FILE_READ_ERROR;
             break;
         }
