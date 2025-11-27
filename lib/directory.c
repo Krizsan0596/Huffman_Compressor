@@ -10,6 +10,10 @@
 #include <unistd.h>
 #include <errno.h>
 
+/*
+ * Rekurzivan bejarja a mappat es fajlonkent egy tombbe menti az adatokat.
+ * Siker eseten a mappa meretet adja vissza bajtokban, hiba eseten negativ kodot.
+ */
 long archive_directory(char *path, Directory_item **archive, int *current_index, int *archive_size) {
     if (*current_index == 0) {
         Directory_item root = {0};
@@ -95,6 +99,10 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
     return dir_size;
 }
 
+/*
+ * Szerializalja az archivalt mappat egy bufferbe.
+ * Siker eseten a buffer meretet adja vissza, hiba eseten negativ kodot.
+ */
 long serialize_archive(Directory_item *archive, int archive_size, char **buffer) {
     if (archive_size == 0) return EMPTY_DIRECTORY;
     int data_size = sizeof(int);
@@ -134,6 +142,10 @@ long serialize_archive(Directory_item *archive, int archive_size, char **buffer)
 }
 
 
+/*
+ * Kicsomagolja az archivalt mappat a megadott utvonalra, letrehozza a mappakat es fajlokat.
+ * Siker eseten 0-t ad vissza, hiba eseten negativ kodot.
+ */
 int extract_directory(char *path, Directory_item *archive, int archive_size, bool force) {
     if (path == NULL) path = ".";
     for (int current_index = 0; current_index < archive_size; current_index++) {
@@ -157,6 +169,10 @@ int extract_directory(char *path, Directory_item *archive, int archive_size, boo
     return SUCCESS;
 }
 
+/*
+ * Visszaalakitja a szerializalt bufferbol az archivum tombot.
+ * Siker eseten az archivum meretet adja vissza, hiba eseten negativ kodot.
+ */
 int deserialize_archive(Directory_item **archive, char *buffer) {
     int archive_size;
     char *current = buffer;
