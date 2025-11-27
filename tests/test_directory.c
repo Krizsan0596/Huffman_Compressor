@@ -182,8 +182,9 @@ int main() {
 
     // 3. Deserialize the archive
     Directory_item *deserialized_archive = NULL;
-    if (deserialize_archive(&deserialized_archive, buffer) != 0) {
-        fprintf(stderr, "Error: Deserialization failed\n");
+    int deserialized_size = deserialize_archive(&deserialized_archive, buffer);
+    if (deserialized_size < 0) {
+        fprintf(stderr, "Error: Deserialization failed with code %d\n", deserialized_size);
         free(buffer);
         free(archive);
         return 1;
@@ -194,7 +195,7 @@ int main() {
         perror("chdir() error");
         return 1;
     }
-    if (extract_directory(".", deserialized_archive, archive_size, true) != 0) {
+    if (extract_directory(".", deserialized_archive, deserialized_size, true) != 0) {
         if (chdir(original_cwd) != 0) {
             perror("chdir() error");
         }
@@ -221,31 +222,31 @@ int main() {
 
 
     // 6. Cleanup
-    // free(buffer);
-    // for (int i = 0; i < archive_size; i++) {
-    //     if (archive[i].is_dir) {
-    //         free(archive[i].dir_path);
-    //     }
-    // }
-    // for (int i = 0; i < archive_size; i++) {
-    //     if (!archive[i].is_dir) {
-    //         free(archive[i].file_path);
-    //         free(archive[i].file_data);
-    //     }
-    // }
-    // free(archive);
-    // for (int i = 0; i < archive_size; i++) {
-    //     if (deserialized_archive[i].is_dir) {
-    //         free(deserialized_archive[i].dir_path);
-    //     }
-    // }
-    // for (int i = 0; i < archive_size; i++) {
-    //     if (!deserialized_archive[i].is_dir) {
-    //         free(deserialized_archive[i].file_path);
-    //         free(deserialized_archive[i].file_data);
-    //     }
-    // }
-    // free(deserialized_archive);
+    free(buffer);
+    for (int i = 0; i < archive_size; i++) {
+        if (archive[i].is_dir) {
+            free(archive[i].dir_path);
+        }
+    }
+    for (int i = 0; i < archive_size; i++) {
+        if (!archive[i].is_dir) {
+            free(archive[i].file_path);
+            free(archive[i].file_data);
+        }
+    }
+    free(archive);
+    for (int i = 0; i < deserialized_size; i++) {
+        if (deserialized_archive[i].is_dir) {
+            free(deserialized_archive[i].dir_path);
+        }
+    }
+    for (int i = 0; i < deserialized_size; i++) {
+        if (!deserialized_archive[i].is_dir) {
+            free(deserialized_archive[i].file_path);
+            free(deserialized_archive[i].file_data);
+        }
+    }
+    free(deserialized_archive);
 
     snprintf(command, sizeof(command), "rm -rf %s", output_dir);
     ret = system(command);

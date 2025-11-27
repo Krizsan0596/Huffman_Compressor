@@ -178,7 +178,8 @@ int deserialize_archive(Directory_item **archive, char *buffer) {
     char *current = buffer;
     memcpy(&archive_size, current, sizeof(int));
     current += sizeof(int);
-    *archive = malloc(archive_size * sizeof(Directory_item));
+    *archive = calloc(archive_size, sizeof(Directory_item));
+    if (*archive == NULL) return MALLOC_ERROR;
     int i = 0;
     while (i < archive_size) {
         memcpy(&(*archive)[i].is_dir, current, sizeof(bool));
