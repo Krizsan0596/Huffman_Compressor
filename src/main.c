@@ -329,7 +329,9 @@ int main(int argc, char* argv[]){
         free(frequencies);
         if (output_generated) free(output_file);
         free(nodes);
-        free(compressed_file->compressed_data);
+        if (compressed_file != NULL) {
+            free(compressed_file->compressed_data);
+        }
 
         for (int i = 0; i < 256; ++i) {
             if (cache[i] != NULL) {
