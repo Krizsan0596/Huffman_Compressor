@@ -31,14 +31,25 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
     }
 
     DIR *directory = opendir(path);
-    if (directory == NULL) return DIRECTORY_OPEN_ERROR;
+    if (directory == NULL) {
+        // Clean up root.dir_path if we just added it
+        if (*current_index == 1) {
+            free((*archive)[0].dir_path);
+            (*archive_size)--;
+            (*current_index)--;
+        }
+        return DIRECTORY_OPEN_ERROR;
+    }
     long dir_size = 0;
     while (true) {
         struct dirent *dir = readdir(directory);
         if (dir == NULL) break;
         else if (strcmp(dir->d_name, ".") == 0 || strcmp(dir->d_name, "..") == 0) continue;
         char *newpath = malloc(strlen(path) + strlen(dir->d_name) + 2);
-        if (newpath == NULL) return MALLOC_ERROR;
+        if (newpath == NULL) {
+            closedir(directory);
+            return MALLOC_ERROR;
+        }
         strcpy(newpath, path);
         strcat(newpath, "/");
         strcat(newpath, dir->d_name);
@@ -53,7 +64,11 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
             Directory_item subdir = {0};
             subdir.is_dir = true;
             subdir.dir_path = strdup(newpath);
-            if (subdir.dir_path == NULL) return MALLOC_ERROR;
+            if (subdir.dir_path == NULL) {
+                free(newpath);
+                closedir(directory);
+                return MALLOC_ERROR;
+            }
             Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
             if (temp != NULL) *archive = temp;
             else {
@@ -79,6 +94,8 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
             dir_size += file.file_size;
             if (file.file_size < 0) {
                 free(file.file_path);
+                free(newpath);
+                closedir(directory);
                 return FILE_READ_ERROR;
             } 
             Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
@@ -158,11 +175,17 @@ int extract_directory(char *path, Directory_item *archive, int archive_size, boo
         strcat(full_path, item_path);
         if (current->is_dir) {
            int ret = mkdir(full_path, 0755);
-           if (ret != 0 && errno != EEXIST) return MKDIR_ERROR;
+           if (ret != 0 && errno != EEXIST) {
+               free(full_path);
+               return MKDIR_ERROR;
+           }
         }
         else {
             int ret = write_raw(full_path, current->file_data, current->file_size, force);
-            if (ret < 0) return FILE_WRITE_ERROR;
+            if (ret < 0) {
+                free(full_path);
+                return FILE_WRITE_ERROR;
+            }
         }
         free(full_path);
     }
