@@ -66,7 +66,6 @@ static void test_compress_basic_pattern(void) {
     assert(compressed.data_size == 6);          // 6 characters encoded with 1 bit per symbol
     assert(compressed.compressed_data != NULL);
     assert(compressed.compressed_data[0] == (char)0xF0);
-    (void)rc;
 
     free(compressed.compressed_data);
     free_cache(cache);
