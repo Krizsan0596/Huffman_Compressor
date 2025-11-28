@@ -34,18 +34,18 @@ static void print_usage(const char *prog_name) {
     printf(usage, prog_name);
 }
 
-int main(int argc, char* argv[]){
-    bool compress_mode = false;
-    bool extract_mode = false;
-    bool force = false;
-    bool directory = false;
-    char *input_file = NULL;
-    char *output_file = NULL;
+/* 
+ * Parancssori opciok feldolgozasa: egy mod valaszthato, az -o a kimenetet, az -f a felulirast kezeli.
+ * Az elso nem kapcsolos argumentum lesz a bemeneti fajl.
+ */
+static int parse_arguments(int argc, char* argv[], Arguments *args) {
+    args->compress_mode = false;
+    args->extract_mode = false;
+    args->force = false;
+    args->directory = false;
+    args->input_file = NULL;
+    args->output_file = NULL;
 
-    /* 
-     * Parancssori opciok feldolgozasa: egy mod valaszthato, az -o a kimenetet, az -f a felulirast kezeli.
-     * Az elso nem kapcsolos argumentum lesz a bemeneti fajl.
-     */
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] == '-') {
             switch (argv[i][1]) {
@@ -53,20 +53,20 @@ int main(int argc, char* argv[]){
                     print_usage(argv[0]);
                     return SUCCESS;
                 case 'c':
-                    compress_mode = true;
+                    args->compress_mode = true;
                     break;
                 case 'x':
-                    extract_mode = true;
+                    args->extract_mode = true;
                     break;
                 case 'f':
-                    force = true;
+                    args->force = true;
                     break;
                 case 'r':
-                    directory = true;
+                    args->directory = true;
                     break;
                 case 'o':
                     if (++i < argc) {
-                        output_file = argv[i];
+                        args->output_file = argv[i];
                     } else {
                         printf("Az -o kapcsolo utan add meg a kimeneti fajlt.\n");
                         print_usage(argv[0]);
@@ -79,8 +79,8 @@ int main(int argc, char* argv[]){
                     return EINVAL;
             }
         } else {
-            if (input_file == NULL) {
-                input_file = argv[i];
+            if (args->input_file == NULL) {
+                args->input_file = argv[i];
             } else {
                 printf("Tobb bemeneti fajl lett megadva.\n");
                 print_usage(argv[0]);
@@ -93,25 +93,43 @@ int main(int argc, char* argv[]){
      * Ellenorizzuk, hogy megadtak-e a bemeneti fajlt, majd leellenorizzuk, hogy olvashato-e.
      * Ha nem, kilepunk a programbol.
      */
-    if (input_file == NULL) {
+    if (args->input_file == NULL) {
         printf("Nem lett bemeneti fajl megadva.\n");
         print_usage(argv[0]);
         return EINVAL;
     }
     
-    FILE *f = fopen(input_file, "r");
+    FILE *f = fopen(args->input_file, "r");
     if (f == NULL) {
-        printf("A (%s) fajl nem nyithato meg.\n", input_file);
+        printf("A (%s) fajl nem nyithato meg.\n", args->input_file);
         print_usage(argv[0]);
         return ENOENT;
     }
     fclose(f);
 
-    if (compress_mode && extract_mode) {
+    if (args->compress_mode && args->extract_mode) {
         printf("A -c es -x kapcsolok kizarjak egymast.\n");
         print_usage(argv[0]);
         return EINVAL;
     }
+
+    return 0;
+}
+
+int main(int argc, char* argv[]){
+    Arguments args;
+    int parse_result = parse_arguments(argc, argv, &args);
+    if (parse_result != 0) {
+        return parse_result;
+    }
+
+    bool compress_mode = args.compress_mode;
+    bool extract_mode = args.extract_mode;
+    bool force = args.force;
+    bool directory = args.directory;
+    char *input_file = args.input_file;
+    char *output_file = args.output_file;
+
     if (directory) {
         struct stat st;
         int ret = stat(input_file, &st);
@@ -123,7 +141,7 @@ int main(int argc, char* argv[]){
     }
     else {
         struct stat st;
-    int ret = stat(input_file, &st);
+        int ret = stat(input_file, &st);
         if (ret != 0) {
             printf("Nem sikerult ellenorizni a fajlt.\n");
             return ret;
@@ -357,9 +375,12 @@ int main(int argc, char* argv[]){
      * majd az eredeti nevre vagy a megadott kimenetre irjuk ki a kitomoritett adatot.
      */
     } else if (extract_mode) {
-        Compressed_file *compressed_file;
+        Compressed_file *compressed_file = NULL;
         char *raw_data = NULL;
+        Directory_item *archive = NULL;
+        int archive_size = 0;
         int res = 0;
+        
         while (true) {
             compressed_file = calloc(1, sizeof(Compressed_file));
             if (compressed_file == NULL) {
@@ -403,8 +424,6 @@ int main(int argc, char* argv[]){
                 break;
             }
 
-            Directory_item *archive = NULL;
-            int archive_size = 0;
             if (directory) {
                 archive_size = deserialize_archive(&archive, raw_data);
                 if (archive_size < 0) {
@@ -435,18 +454,7 @@ int main(int argc, char* argv[]){
                     res = EIO;
                     break;
                 }
-                for (int i = 0; i < archive_size; ++i) {
-                    if (archive[i].is_dir) {
-                        free(archive[i].dir_path);
-                    } else {
-                        free(archive[i].file_path);
-                        free(archive[i].file_data);
-                    }
-                }
-                free(archive);
-                if (res != 0) break;
             }
-
             else {
                 int write_res = write_raw(output_file != NULL ? output_file : compressed_file->original_file, raw_data, compressed_file->original_size, force);
                 if (write_res < 0) {
@@ -457,12 +465,24 @@ int main(int argc, char* argv[]){
             }
             break;
         }
+        
         free(raw_data);
-        free(compressed_file->file_name);
-        free(compressed_file->original_file);
-        free(compressed_file->huffman_tree);
-        free(compressed_file->compressed_data);
-        free(compressed_file);
+        if (compressed_file != NULL) {
+            free(compressed_file->file_name);
+            free(compressed_file->original_file);
+            free(compressed_file->huffman_tree);
+            free(compressed_file->compressed_data);
+            free(compressed_file);
+        }
+        for (int i = 0; i < archive_size; ++i) {
+            if (archive[i].is_dir) {
+                free(archive[i].dir_path);
+            } else {
+                free(archive[i].file_path);
+                free(archive[i].file_data);
+            }
+        }
+        free(archive);
         return res;
     } 
     else {
