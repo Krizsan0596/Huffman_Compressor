@@ -116,6 +116,153 @@ static int parse_arguments(int argc, char* argv[], Arguments *args) {
     return 0;
 }
 
+/*
+ * Tomoriteshez szukseges mappa feldolgozas.
+ * Bejarja a mappat, archivalja es szerializalja az adatokat.
+ * Sikeres muveletek eseten a szerializalt adat hosszat adja vissza, hiba eseten negativ erteket.
+ */
+static int prepare_directory(char *input_file, char **data, int *directory_size) {
+    char current_path[1000];
+    char *sep = strrchr(input_file, '/');
+    char *parent_dir = NULL;
+    char *file_name = NULL;
+    Directory_item *archive = NULL;
+    int archive_size = 0;
+    int current_index = 0;
+    int data_len = 0;
+    
+    while (true) {
+        if (getcwd(current_path, sizeof(current_path)) == NULL) {
+            printf("Nem sikerult elmenteni az utat.\n");
+            data_len = errno;
+            break;
+        }
+        
+        if (sep != NULL) {
+            int parent_dir_len = sep - input_file;
+            parent_dir = malloc(parent_dir_len + 1);
+            strncpy(parent_dir, input_file, parent_dir_len);
+            parent_dir[parent_dir_len] = '\0';
+            file_name = malloc(strlen(input_file) - parent_dir_len + 1);
+            strncpy(file_name, sep + 1, strlen(input_file) - parent_dir_len);
+            file_name[strlen(input_file) - parent_dir_len] = '\0';
+            if (chdir(parent_dir) != 0) {
+                printf("Nem sikerult belepni a mappaba.\n");
+                data_len = errno;
+                break;
+            }
+        }
+        
+        *directory_size = archive_directory((sep != NULL) ? file_name : input_file, &archive, &current_index, &archive_size);
+        if (*directory_size < 0) {
+            if (*directory_size == MALLOC_ERROR) {
+                printf("Nem sikerult lefoglalni a memoriat a mappa archivallasakor.\n");
+            } else if (*directory_size == DIRECTORY_OPEN_ERROR) {
+                printf("Nem sikerult megnyitni a mappat.\n");
+            } else if (*directory_size == FILE_READ_ERROR) {
+                printf("Nem sikerult beolvasni egy fajlt a mappabol.\n");
+            } else {
+                printf("Nem sikerult a mappa archivallasa.\n");
+            }
+            data_len = *directory_size;
+            break;
+        }
+        
+        data_len = serialize_archive(archive, archive_size, data);
+        if (data_len < 0) {
+            if (data_len == MALLOC_ERROR) {
+                printf("Nem sikerult lefoglalni a memoriat a szerializalaskor.\n");
+            } else if (data_len == EMPTY_DIRECTORY) {
+                printf("A mappa ures.\n");
+            } else {
+                printf("Nem sikerult a mappa szerializalasa.\n");
+            }
+            break;
+        }
+        
+        if (sep != NULL) {
+            if (chdir(current_path) != 0) {
+                printf("Nem sikerult kilepni a mappaba.\n");
+                data_len = errno;
+                break;
+            }
+        }
+        break;
+    }
+    
+    for (int i = 0; i < archive_size; ++i) {
+        if (archive[i].is_dir) {
+            free(archive[i].dir_path);
+        } else {
+            free(archive[i].file_path);
+            free(archive[i].file_data);
+        }
+    }
+    free(archive);
+    free(parent_dir);
+    free(file_name);
+    
+    return data_len;
+}
+
+/*
+ * Kitomoriteshez szukseges mappa feldolgozas.
+ * Deszerializalja es kitomoriti az archivalt mappakat.
+ * Sikeres muveletek eseten 0-t, hiba eseten negativ erteket ad vissza.
+ */
+static int restore_directory(char *raw_data, char *output_file, bool force) {
+    Directory_item *archive = NULL;
+    int archive_size = 0;
+    int res = 0;
+    
+    while (true) {
+        archive_size = deserialize_archive(&archive, raw_data);
+        if (archive_size < 0) {
+            if (archive_size == MALLOC_ERROR) {
+                printf("Nem sikerult lefoglalni a memoriat a beolvasaskor.\n");
+            } else {
+                printf("Nem sikerult a tomoritett mappa beolvasasa.\n");
+            }
+            res = EIO;
+            break;
+        }
+        
+        if (output_file != NULL) {
+            if (mkdir(output_file, 0755) != 0 && errno != EEXIST) {
+                printf("Nem sikerult letrehozni a kimeneti mappat.\n");
+                res = EIO;
+                break;
+            }
+        }
+        
+        int ret = extract_directory(output_file != NULL ? output_file : ".", archive, archive_size, force);
+        if (ret != 0) {
+            if (ret == MKDIR_ERROR) {
+                printf("Nem sikerult letrehozni egy mappat a kitomoriteskor.\n");
+            } else if (ret == FILE_WRITE_ERROR) {
+                printf("Nem sikerult kiirni egy fajlt a kitomoriteskor.\n");
+            } else {
+                printf("Nem sikerult a mappa kitomoritese.\n");
+            }
+            res = EIO;
+            break;
+        }
+        break;
+    }
+    
+    for (int i = 0; i < archive_size; ++i) {
+        if (archive[i].is_dir) {
+            free(archive[i].dir_path);
+        } else {
+            free(archive[i].file_path);
+            free(archive[i].file_data);
+        }
+    }
+    free(archive);
+    
+    return res;
+}
+
 int main(int argc, char* argv[]){
     Arguments args;
     int parse_result = parse_arguments(argc, argv, &args);
@@ -167,64 +314,12 @@ int main(int argc, char* argv[]){
         char *data;
         int data_len = 0;
         int directory_size = 0;
-        Directory_item *archive = NULL;
-        int archive_size = 0;
-        int current_index = 0;
 
         if (directory) {
-            char current_path[1000];
-            if (getcwd(current_path, sizeof(current_path)) == NULL) {
-                printf("Nem sikerult elmenteni az utat.\n");
-                return errno;
-            }
-            char *sep = strrchr(input_file, '/');
-            char *parent_dir = NULL;
-            char *file_name = NULL;
-            if (sep != NULL) {
-                int parent_dir_len = sep - input_file;
-                parent_dir = malloc(parent_dir_len + 1);
-                strncpy(parent_dir, input_file, parent_dir_len);
-                parent_dir[parent_dir_len] = '\0';
-                file_name = malloc(strlen(input_file) - parent_dir_len + 1);
-                strncpy(file_name, sep + 1, strlen(input_file) - parent_dir_len);
-                file_name[strlen(input_file) - parent_dir_len] = '\0';
-                if (chdir(parent_dir) != 0) {
-                    printf("Nem sikerult belepni a mappaba.\n");
-                    return errno;
-                }
-            }
-            directory_size = archive_directory((sep != NULL) ? file_name : input_file, &archive, &current_index, &archive_size);
-            if (directory_size < 0) {
-                if (directory_size == MALLOC_ERROR) {
-                    printf("Nem sikerult lefoglalni a memoriat a mappa archivallasakor.\n");
-                } else if (directory_size == DIRECTORY_OPEN_ERROR) {
-                    printf("Nem sikerult megnyitni a mappat.\n");
-                } else if (directory_size == FILE_READ_ERROR) {
-                    printf("Nem sikerult beolvasni egy fajlt a mappabol.\n");
-                } else {
-                    printf("Nem sikerult a mappa archivallasa.\n");
-                }
-                return directory_size;
-            }
-            data_len = serialize_archive(archive, archive_size, &data);
+            data_len = prepare_directory(input_file, &data, &directory_size);
             if (data_len < 0) {
-                if (data_len == MALLOC_ERROR) {
-                    printf("Nem sikerult lefoglalni a memoriat a szerializalaskor.\n");
-                } else if (data_len == EMPTY_DIRECTORY) {
-                    printf("A mappa ures.\n");
-                } else {
-                    printf("Nem sikerult a mappa szerializalasa.\n");
-                }
                 return data_len;
             }
-            if (sep != NULL) {
-                if (chdir(current_path) != 0) {
-                    printf("Nem sikerult kilepni a mappaba.\n");
-                    return errno;
-                }
-            }
-            free(parent_dir);
-            free(file_name);
         }
         else {
             data_len = read_raw(input_file, &data);
@@ -359,15 +454,6 @@ int main(int argc, char* argv[]){
         }
         free(cache);
         free(data);
-        for (int i = 0; i < archive_size; ++i) {
-            if (archive[i].is_dir) {
-                free(archive[i].dir_path);
-            } else {
-                free(archive[i].file_path);
-                free(archive[i].file_data);
-            }
-        }
-        free(archive);
         return res;
 
     /*
@@ -377,8 +463,6 @@ int main(int argc, char* argv[]){
     } else if (extract_mode) {
         Compressed_file *compressed_file = NULL;
         char *raw_data = NULL;
-        Directory_item *archive = NULL;
-        int archive_size = 0;
         int res = 0;
         
         while (true) {
@@ -425,33 +509,9 @@ int main(int argc, char* argv[]){
             }
 
             if (directory) {
-                archive_size = deserialize_archive(&archive, raw_data);
-                if (archive_size < 0) {
-                    if (archive_size == MALLOC_ERROR) {
-                        printf("Nem sikerult lefoglalni a memoriat a beolvasaskor.\n");
-                    } else {
-                        printf("Nem sikerult a tomoritett mappa beolvasasa.\n");
-                    }
-                    res = EIO;
-                    break;
-                } 
-                if (output_file != NULL) {
-                    if (mkdir(output_file, 0755) != 0 && errno != EEXIST) {
-                        printf("Nem sikerult letrehozni a kimeneti mappat.\n");
-                        res = EIO;
-                        break;
-                    }
-                }
-                int ret = extract_directory(output_file != NULL ? output_file : ".", archive, archive_size, force);
+                int ret = restore_directory(raw_data, output_file, force);
                 if (ret != 0) {
-                    if (ret == MKDIR_ERROR) {
-                        printf("Nem sikerult letrehozni egy mappat a kitomoriteskor.\n");
-                    } else if (ret == FILE_WRITE_ERROR) {
-                        printf("Nem sikerult kiirni egy fajlt a kitomoriteskor.\n");
-                    } else {
-                        printf("Nem sikerult a mappa kitomoritese.\n");
-                    }
-                    res = EIO;
+                    res = ret;
                     break;
                 }
             }
@@ -474,15 +534,6 @@ int main(int argc, char* argv[]){
             free(compressed_file->compressed_data);
             free(compressed_file);
         }
-        for (int i = 0; i < archive_size; ++i) {
-            if (archive[i].is_dir) {
-                free(archive[i].dir_path);
-            } else {
-                free(archive[i].file_path);
-                free(archive[i].file_data);
-            }
-        }
-        free(archive);
         return res;
     } 
     else {
