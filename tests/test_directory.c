@@ -139,8 +139,7 @@ int main() {
     // Create output directory
     char command[1024];
     snprintf(command, sizeof(command), "rm -rf %s", output_dir);
-    int ret = system(command);
-    (void)ret;
+    system(command);
     mkdir(output_dir, 0755);
 
     // 1. Archive the directory
@@ -249,11 +248,9 @@ int main() {
     free(deserialized_archive);
 
     snprintf(command, sizeof(command), "rm -rf %s", output_dir);
-    ret = system(command);
-    (void)ret;
+    system(command);
     snprintf(command, sizeof(command), "rm -rf %s", test_dir);
-    ret = system(command);
-    (void)ret;
+    system(command);
 
     return 0;
 }

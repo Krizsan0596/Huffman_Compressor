@@ -15,6 +15,7 @@ add_executable(${PROJECT_NAME}
     lib/directory.c
 )
 
+target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Werror -g)
 target_include_directories(${PROJECT_NAME} PRIVATE lib)
 target_link_libraries(${PROJECT_NAME} PRIVATE m)
 
@@ -37,4 +38,3 @@ add_executable(directory_test tests/test_directory.c lib/directory.c lib/file.c 
 target_include_directories(directory_test PRIVATE lib)
 target_link_libraries(directory_test m)
 add_test(NAME DirectoryTest COMMAND directory_test)
-

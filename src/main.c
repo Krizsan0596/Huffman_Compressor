@@ -64,6 +64,9 @@ static int parse_arguments(int argc, char* argv[], Arguments *args) {
                 case 'r':
                     args->directory = true;
                     break;
+                case 'r':
+                    directory = true;
+                    break;
                 case 'o':
                     if (++i < argc) {
                         args->output_file = argv[i];
