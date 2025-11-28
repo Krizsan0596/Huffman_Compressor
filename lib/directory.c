@@ -32,7 +32,6 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
 
     DIR *directory = opendir(path);
     if (directory == NULL) {
-        // Clean up root.dir_path if we just added it
         if (*current_index == 1) {
             free((*archive)[0].dir_path);
             (*archive_size)--;

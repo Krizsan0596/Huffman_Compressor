@@ -76,4 +76,13 @@ typedef struct {
     };
 } Directory_item;
 
+typedef struct {
+    bool compress_mode;
+    bool extract_mode;
+    bool force;
+    bool directory;
+    char *input_file;
+    char *output_file;
+} Arguments;
+
 #endif
