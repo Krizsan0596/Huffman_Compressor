@@ -321,6 +321,9 @@ int main(int argc, char* argv[]){
         if (directory) {
             data_len = prepare_directory(input_file, &data, &directory_size);
             if (data_len < 0) {
+                if (output_generated) {
+                    free(output_file);
+                }
                 return data_len;
             }
         }
@@ -457,7 +460,7 @@ int main(int argc, char* argv[]){
         }
         free(cache);
         free(data);
-        return res;
+        return write_res;
 
     /*
      * Kitomoritesi ag: beolvassuk a kapott fajlt, kitomoritunk egy bufferbe,
