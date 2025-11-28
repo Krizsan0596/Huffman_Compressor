@@ -50,6 +50,7 @@ typedef struct {
 // A segedfuggvenyek hibakodjait tarolja.
 typedef enum {
     SUCCESS = 0,
+    HELP_REQUESTED = 1,
     MALLOC_ERROR = -1,
     FILE_READ_ERROR = -2,
     FILE_MAGIC_ERROR = -3,

@@ -51,7 +51,7 @@ static int parse_arguments(int argc, char* argv[], Arguments *args) {
             switch (argv[i][1]) {
                 case 'h':
                     print_usage(argv[0]);
-                    return SUCCESS;
+                    return HELP_REQUESTED;
                 case 'c':
                     args->compress_mode = true;
                     break;
@@ -63,9 +63,6 @@ static int parse_arguments(int argc, char* argv[], Arguments *args) {
                     break;
                 case 'r':
                     args->directory = true;
-                    break;
-                case 'r':
-                    directory = true;
                     break;
                 case 'o':
                     if (++i < argc) {
@@ -132,26 +129,41 @@ static int prepare_directory(char *input_file, char **data, int *directory_size)
     Directory_item *archive = NULL;
     int archive_size = 0;
     int current_index = 0;
-    int data_len = 0;
+    int res = 0;
     
     while (true) {
         if (getcwd(current_path, sizeof(current_path)) == NULL) {
             printf("Nem sikerult elmenteni az utat.\n");
-            data_len = errno;
+            res = errno;
             break;
         }
         
-        if (sep != NULL) {
-            int parent_dir_len = sep - input_file;
-            parent_dir = malloc(parent_dir_len + 1);
-            strncpy(parent_dir, input_file, parent_dir_len);
-            parent_dir[parent_dir_len] = '\0';
-            file_name = malloc(strlen(input_file) - parent_dir_len + 1);
-            strncpy(file_name, sep + 1, strlen(input_file) - parent_dir_len);
-            file_name[strlen(input_file) - parent_dir_len] = '\0';
+
+        if (sep != NULL && !(strncmp(input_file, "./", 2) == 0 || strncmp(input_file, "../", 3) == 0)) {
+            if (sep == input_file) {
+                parent_dir = strdup("/");
+                if (parent_dir == NULL) {
+                    res = MALLOC_ERROR;
+                    break;
+                }
+            }
+            else {
+                int parent_dir_len = sep - input_file;
+                parent_dir = malloc(parent_dir_len + 1);
+                if (parent_dir == NULL) {
+                    res = MALLOC_ERROR;
+                    break;
+                }
+                strncpy(parent_dir, input_file, parent_dir_len);
+                parent_dir[parent_dir_len] = '\0';
+            }
+            file_name = strdup(sep + 1);
+            if (file_name == NULL) {
+                res = MALLOC_ERROR;
+            }
             if (chdir(parent_dir) != 0) {
                 printf("Nem sikerult belepni a mappaba.\n");
-                data_len = errno;
+                res = errno;
                 break;
             }
         }
@@ -167,15 +179,15 @@ static int prepare_directory(char *input_file, char **data, int *directory_size)
             } else {
                 printf("Nem sikerult a mappa archivallasa.\n");
             }
-            data_len = *directory_size;
+            res = *directory_size;
             break;
         }
         
-        data_len = serialize_archive(archive, archive_size, data);
-        if (data_len < 0) {
-            if (data_len == MALLOC_ERROR) {
+        res = serialize_archive(archive, archive_size, data);
+        if (res < 0) {
+            if (res == MALLOC_ERROR) {
                 printf("Nem sikerult lefoglalni a memoriat a szerializalaskor.\n");
-            } else if (data_len == EMPTY_DIRECTORY) {
+            } else if (res == EMPTY_DIRECTORY) {
                 printf("A mappa ures.\n");
             } else {
                 printf("Nem sikerult a mappa szerializalasa.\n");
@@ -185,27 +197,29 @@ static int prepare_directory(char *input_file, char **data, int *directory_size)
         
         if (sep != NULL) {
             if (chdir(current_path) != 0) {
-                printf("Nem sikerult kilepni a mappaba.\n");
-                data_len = errno;
+                printf("Nem sikerult kilepni a mappabol.\n");
+                res = errno;
                 break;
             }
         }
         break;
     }
     
-    for (int i = 0; i < archive_size; ++i) {
-        if (archive[i].is_dir) {
-            free(archive[i].dir_path);
-        } else {
-            free(archive[i].file_path);
-            free(archive[i].file_data);
+    if (archive_size > 0) {
+        for (int i = 0; i < archive_size; ++i) {
+            if (archive[i].is_dir) {
+                free(archive[i].dir_path);
+            } else {
+                free(archive[i].file_path);
+                free(archive[i].file_data);
+            }
         }
     }
     free(archive);
     free(parent_dir);
     free(file_name);
     
-    return data_len;
+    return res;
 }
 
 /*
@@ -252,13 +266,14 @@ static int restore_directory(char *raw_data, char *output_file, bool force) {
         }
         break;
     }
-    
-    for (int i = 0; i < archive_size; ++i) {
-        if (archive[i].is_dir) {
-            free(archive[i].dir_path);
-        } else {
-            free(archive[i].file_path);
-            free(archive[i].file_data);
+    if (archive_size > 0) {
+        for (int i = 0; i < archive_size; ++i) {
+            if (archive[i].is_dir) {
+                free(archive[i].dir_path);
+            } else {
+                free(archive[i].file_path);
+                free(archive[i].file_data);
+            }
         }
     }
     free(archive);
@@ -269,29 +284,25 @@ static int restore_directory(char *raw_data, char *output_file, bool force) {
 int main(int argc, char* argv[]){
     Arguments args;
     int parse_result = parse_arguments(argc, argv, &args);
-    if (parse_result != 0) {
+    if (parse_result == HELP_REQUESTED) {
+        return SUCCESS;
+    }
+    if (parse_result != SUCCESS) {
         return parse_result;
     }
 
-    bool compress_mode = args.compress_mode;
-    bool extract_mode = args.extract_mode;
-    bool force = args.force;
-    bool directory = args.directory;
-    char *input_file = args.input_file;
-    char *output_file = args.output_file;
-
-    if (directory) {
+    if (args.directory) {
         struct stat st;
-        int ret = stat(input_file, &st);
+        int ret = stat(args.input_file, &st);
         if (ret != 0) {
             printf("Nem sikerult ellenorizni a mappat.\n");
             return ret;
         }
-        else if (S_ISREG(st.st_mode)) directory = false;
+        else if (S_ISREG(st.st_mode)) args.directory = false;
     }
     else {
         struct stat st;
-        int ret = stat(input_file, &st);
+        int ret = stat(args.input_file, &st);
         if (ret != 0) {
             printf("Nem sikerult ellenorizni a fajlt.\n");
             return ret;
@@ -303,13 +314,13 @@ int main(int argc, char* argv[]){
         }
     }
     
-    if (compress_mode) {
-        // Ha nem adott meg kimeneti fajt a felhasznalo, general egyet.
+    if (args.compress_mode) {
+        // Ha nem adott meg kimeneti fajlt a felhasznalo, general egyet.
         bool output_generated = false;
-        if (output_file == NULL) {
+        if (args.output_file == NULL) {
             output_generated = true;
-            output_file = generate_output_file(input_file);
-            if (output_file == NULL) {
+            args.output_file = generate_output_file(args.input_file);
+            if (args.output_file == NULL) {
                 printf("Nem sikerult lefoglalni a memoriat.\n");
                 return ENOMEM;
             }
@@ -318,16 +329,16 @@ int main(int argc, char* argv[]){
         int data_len = 0;
         int directory_size = 0;
 
-        if (directory) {
-            data_len = prepare_directory(input_file, &data, &directory_size);
+        if (args.directory) {
+            data_len = prepare_directory(args.input_file, &data, &directory_size);
             if (data_len < 0) {
                 return data_len;
             }
         }
         else {
-            data_len = read_raw(input_file, &data);
+            data_len = read_raw(args.input_file, &data);
             if (data_len < 0) {
-                printf("Nem sikerult megnyitni a fajlt (%s).\n", input_file);
+                printf("Nem sikerult megnyitni a fajlt (%s).\n", args.input_file);
                 return EIO;
             }
         }
@@ -359,7 +370,7 @@ int main(int argc, char* argv[]){
             }
 
             if (leaf_count == 0) {
-                printf("A fajl (%s) ures.\n", input_file);
+                printf("A fajl (%s) ures.\n", args.input_file);
                 res = SUCCESS;
                 break;
             }
@@ -414,15 +425,15 @@ int main(int argc, char* argv[]){
                 break;
             }
 
-            if (directory) compressed_file->is_dir = true;
+            if (args.directory) compressed_file->is_dir = true;
             else compressed_file->is_dir = false;
 
             compressed_file->huffman_tree = nodes;
             compressed_file->tree_size = tree_size * sizeof(Node);
-            compressed_file->original_file = input_file;
+            compressed_file->original_file = args.input_file;
             compressed_file->original_size = data_len;
-            compressed_file->file_name = output_file;
-            write_res = write_compressed(compressed_file, force);
+            compressed_file->file_name = args.output_file;
+            write_res = write_compressed(compressed_file, args.force);
             if (write_res < 0) {
                 if (write_res == NO_OVERWRITE) {
                     printf("A fajlt nem irtam felul, nem tortent meg a tomorites.\n");
@@ -438,12 +449,12 @@ int main(int argc, char* argv[]){
                         "Tomoritett meret: %d%s\n"
                         "Tomorites aranya: %.2f%%\n", data_len, get_unit(&data_len), 
                                                     write_res, get_unit(&write_res), 
-                                                    (double)write_res/(directory ? directory_size : data_len) * 100);
+                                                    (double)write_res/(args.directory ? directory_size : data_len) * 100);
             }
             break;
         }
         free(frequencies);
-        if (output_generated) free(output_file);
+        if (output_generated) free(args.output_file);
         free(nodes);
         if (compressed_file != NULL) {
             free(compressed_file->compressed_data);
@@ -463,7 +474,7 @@ int main(int argc, char* argv[]){
      * Kitomoritesi ag: beolvassuk a kapott fajlt, kitomoritunk egy bufferbe,
      * majd az eredeti nevre vagy a megadott kimenetre irjuk ki a kitomoritett adatot.
      */
-    } else if (extract_mode) {
+    } else if (args.extract_mode) {
         Compressed_file *compressed_file = NULL;
         char *raw_data = NULL;
         int res = 0;
@@ -476,23 +487,23 @@ int main(int argc, char* argv[]){
                 break;
             }
             
-            int read_res = read_compressed(input_file, compressed_file);
+            int read_res = read_compressed(args.input_file, compressed_file);
             if (read_res != 0) {
                 if (read_res == FILE_MAGIC_ERROR) {
-                    printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.\n", input_file);
+                    printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.\n", args.input_file);
                     res = EBADF;
                     break;
                 }
-                printf("Nem sikerult beolvasni a tomoritett fajlt (%s).\n", input_file);
+                printf("Nem sikerult beolvasni a tomoritett fajlt (%s).\n", args.input_file);
                 res = EIO;
                 break;
             }
 
             // A fajlbol beolvassa hogy mappa volt e tomoritve.
-            directory = compressed_file->is_dir;
+            args.directory = compressed_file->is_dir;
             
             if (compressed_file->original_size <= 0) {
-                printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.\n", input_file);
+                printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.\n", args.input_file);
                 res = EINVAL;
                 break;
             }
@@ -511,17 +522,17 @@ int main(int argc, char* argv[]){
                 break;
             }
 
-            if (directory) {
-                int ret = restore_directory(raw_data, output_file, force);
+            if (args.directory) {
+                int ret = restore_directory(raw_data, args.output_file, args.force);
                 if (ret != 0) {
                     res = ret;
                     break;
                 }
             }
             else {
-                int write_res = write_raw(output_file != NULL ? output_file : compressed_file->original_file, raw_data, compressed_file->original_size, force);
+                int write_res = write_raw(args.output_file != NULL ? args.output_file : compressed_file->original_file, raw_data, compressed_file->original_size, args.force);
                 if (write_res < 0) {
-                    printf("Hiba tortent a kimeneti fajl (%s) irasa kozben.\n", output_file != NULL ? output_file : compressed_file->original_file);
+                    printf("Hiba tortent a kimeneti fajl (%s) irasa kozben.\n", args.output_file != NULL ? args.output_file : compressed_file->original_file);
                     res = EIO;
                     break;
                 }

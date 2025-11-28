@@ -15,104 +15,134 @@
  * Siker eseten a mappa meretet adja vissza bajtokban, hiba eseten negativ kodot.
  */
 long archive_directory(char *path, Directory_item **archive, int *current_index, int *archive_size) {
-    if (*current_index == 0) {
-        Directory_item root = {0};
-        root.is_dir = true;
-        root.dir_path = strdup(path);
-        if (root.dir_path == NULL) return MALLOC_ERROR;
-        Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
-        if (temp != NULL) *archive = temp;
-        else {
-            free(root.dir_path);
-            return MALLOC_ERROR;
-        }
-        (*archive_size)++;
-        (*archive)[(*current_index)++] = root;
-    }
-
-    DIR *directory = opendir(path);
-    if (directory == NULL) {
-        if (*current_index == 1) {
-            free((*archive)[0].dir_path);
-            (*archive_size)--;
-            (*current_index)--;
-        }
-        return DIRECTORY_OPEN_ERROR;
-    }
+    DIR *directory = NULL;
     long dir_size = 0;
+    long result = 0;
+    char *newpath = NULL;
+    Directory_item current_item = {0};
+    
     while (true) {
-        struct dirent *dir = readdir(directory);
-        if (dir == NULL) break;
-        else if (strcmp(dir->d_name, ".") == 0 || strcmp(dir->d_name, "..") == 0) continue;
-        char *newpath = malloc(strlen(path) + strlen(dir->d_name) + 2);
-        if (newpath == NULL) {
-            closedir(directory);
-            return MALLOC_ERROR;
-        }
-        strcpy(newpath, path);
-        strcat(newpath, "/");
-        strcat(newpath, dir->d_name);
-
-        struct stat st;
-        if (stat(newpath, &st) != 0) {
-            free(newpath);
-            continue;
-        }
-
-        if (S_ISDIR(st.st_mode)) {
-            Directory_item subdir = {0};
-            subdir.is_dir = true;
-            subdir.dir_path = strdup(newpath);
-            if (subdir.dir_path == NULL) {
-                free(newpath);
-                closedir(directory);
-                return MALLOC_ERROR;
+        if (*current_index == 0) {
+            Directory_item root = {0};
+            root.is_dir = true;
+            root.dir_path = strdup(path);
+            if (root.dir_path == NULL) {
+                result = MALLOC_ERROR;
+                break;
             }
             Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
             if (temp != NULL) *archive = temp;
             else {
-                free(newpath);
-                free(subdir.dir_path);
-                return MALLOC_ERROR;
+                result = MALLOC_ERROR;
+                current_item = root;
+                break;
             }
             (*archive_size)++;
-            (*archive)[(*current_index)++] = subdir;
-            long subdir_size = archive_directory(newpath, archive, current_index, archive_size);
-            if (subdir_size < 0) {
-                free(newpath);
-                return subdir_size;
+            (*archive)[(*current_index)++] = root;
+        }
+
+        directory = opendir(path);
+        if (directory == NULL) {
+            if (*current_index == 1) {
+                current_item = (*archive)[0];
+                (*archive_size)--;
+                (*current_index)--;
             }
-            dir_size += subdir_size;
-        } 
-        else if (S_ISREG(st.st_mode)) {
-            Directory_item file = {0};
-            file.is_dir = false;
-            file.file_path = strdup(newpath);
-            if (file.file_path == NULL) return MALLOC_ERROR;
-            file.file_size = read_raw(newpath, &file.file_data);
-            dir_size += file.file_size;
-            if (file.file_size < 0) {
-                free(file.file_path);
+            result = DIRECTORY_OPEN_ERROR;
+            break;
+        }
+        
+        while (true) {
+            struct dirent *dir = readdir(directory);
+            if (dir == NULL) break;
+            else if (strcmp(dir->d_name, ".") == 0 || strcmp(dir->d_name, "..") == 0) continue;
+            
+            newpath = malloc(strlen(path) + strlen(dir->d_name) + 2);
+            if (newpath == NULL) {
+                result = MALLOC_ERROR;
+                break;
+            }
+            strcpy(newpath, path);
+            strcat(newpath, "/");
+            strcat(newpath, dir->d_name);
+
+            struct stat st;
+            if (stat(newpath, &st) != 0) {
                 free(newpath);
-                closedir(directory);
-                return FILE_READ_ERROR;
+                newpath = NULL;
+                continue;
+            }
+
+            if (S_ISDIR(st.st_mode)) {
+                Directory_item subdir = {0};
+                subdir.is_dir = true;
+                subdir.dir_path = strdup(newpath);
+                if (subdir.dir_path == NULL) {
+                    result = MALLOC_ERROR;
+                    break;
+                }
+                Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
+                if (temp != NULL) *archive = temp;
+                else {
+                    result = MALLOC_ERROR;
+                    current_item = subdir;
+                    break;
+                }
+                (*archive_size)++;
+                (*archive)[(*current_index)++] = subdir;
+                long subdir_size = archive_directory(newpath, archive, current_index, archive_size);
+                if (subdir_size < 0) {
+                    result = subdir_size;
+                    break;
+                }
+                dir_size += subdir_size;
             } 
-            Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
-            if (temp != NULL) *archive = temp;
-            else {
-                free(newpath);
-                free(file.file_path);
-                free(file.file_data);
-                return MALLOC_ERROR;
-            }
+            else if (S_ISREG(st.st_mode)) {
+                Directory_item file = {0};
+                file.is_dir = false;
+                file.file_path = strdup(newpath);
+                if (file.file_path == NULL) {
+                    result = MALLOC_ERROR;
+                    break;
+                }
+                file.file_size = read_raw(newpath, &file.file_data);
+                dir_size += file.file_size;
+                if (file.file_size < 0) {
+                    result = FILE_READ_ERROR;
+                    current_item = file;
+                    break;
+                } 
+                Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
+                if (temp != NULL) *archive = temp;
+                else {
+                    result = MALLOC_ERROR;
+                    current_item = file;
+                    break;
+                }
 
-            (*archive_size)++;
-            (*archive)[(*current_index)++] = file;
+                (*archive_size)++;
+                (*archive)[(*current_index)++] = file;
+            }
+            free(newpath);
+            newpath = NULL;
         }
-        free(newpath);
+        
+        if (result < 0) break;
+        result = dir_size;
+        break;
     }
-    closedir(directory);
-    return dir_size;
+    
+    if (result < 0) {
+        if (current_item.is_dir) {
+            free(current_item.dir_path);
+        } else {
+            free(current_item.file_path);
+            free(current_item.file_data);
+        }
+    }
+    free(newpath);
+    if (directory != NULL) closedir(directory);
+    return result;
 }
 
 /*
