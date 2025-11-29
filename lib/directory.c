@@ -349,7 +349,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
         }
         
         /* Visszalepunk az eredeti mappaba. */
-        if (sep != NULL) {
+        if (sep != NULL && !(strncmp(input_file, "./", 2) == 0 || strncmp(input_file, "../", 3) == 0)) {
             if (chdir(current_path) != 0) {
                 printf("Nem sikerult kilepni a mappabol.\n");
                 res = DIRECTORY_ERROR;
