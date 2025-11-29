@@ -236,6 +236,7 @@ int compress(char *original_data, long data_len, Node *nodes, Node *root_node, c
 
 /*
  * A bemeneti fajlt vagy mappat beolvassa, felepit egy Huffman fat es kiirja a tomoritett adatot.
+ * Siker eseten 0-t, hiba eseten negativ hibakodot ad vissza.
  */
 int run_compression(Arguments args) {
     // Ha nem adott meg kimeneti fajlt a felhasznalo, general egyet.
@@ -390,12 +391,14 @@ int run_compression(Arguments args) {
         free(compressed_file);
     }
 
-    for (int i = 0; i < 256; ++i) {
-        if (cache[i] != NULL) {
-            free(cache[i]);
+    if (cache != NULL) {
+        for (int i = 0; i < 256; ++i) {
+            if (cache[i] != NULL) {
+                free(cache[i]);
+            }
         }
+        free(cache);
     }
-    free(cache);
     free(data);
     if (write_res < 0) res = write_res;
     return res;
