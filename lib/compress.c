@@ -397,5 +397,6 @@ int run_compression(Arguments args) {
     }
     free(cache);
     free(data);
-    return res != 0 ? res : write_res;
+    if (write_res < 0) res = write_res;
+    return res;
 }

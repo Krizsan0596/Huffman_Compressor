@@ -109,12 +109,12 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
                     break;
                 }
                 file.file_size = read_raw(newpath, &file.file_data);
-                dir_size += file.file_size;
                 if (file.file_size < 0) {
                     result = FILE_READ_ERROR;
                     current_item = file;
                     break;
-                } 
+                }
+                dir_size += file.file_size;
                 Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
                 if (temp != NULL) *archive = temp;
                 else {
@@ -353,6 +353,10 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
             if (chdir(current_path) != 0) {
                 printf("Nem sikerult kilepni a mappabol.\n");
                 res = DIRECTORY_ERROR;
+                if (*data != NULL) {
+                    free(*data);
+                    *data = NULL;
+                }
                 break;
             }
         }
