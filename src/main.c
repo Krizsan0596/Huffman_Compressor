@@ -113,7 +113,7 @@ int parse_arguments(int argc, char* argv[], Arguments *args) {
         return EINVAL;
     }
 
-    return 0;
+    return SUCCESS;
 }
 
 /*
