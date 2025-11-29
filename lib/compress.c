@@ -242,7 +242,7 @@ int run_compression(Arguments args) {
             return ENOMEM;
         }
     }
-    char *data;
+    char *data = NULL;
     int data_len = 0;
     int directory_size = 0;
 
