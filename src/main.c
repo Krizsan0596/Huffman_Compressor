@@ -116,6 +116,9 @@ static int parse_arguments(int argc, char* argv[], Arguments *args) {
     return 0;
 }
 
+/*
+ * A kapcsolokat feldolgozva elinditja a tomorites vagy kitomorites folyamatat, es a hibakodot adja vissza.
+ */
 int main(int argc, char* argv[]){
     Arguments args;
     int parse_result = parse_arguments(argc, argv, &args);
@@ -126,6 +129,7 @@ int main(int argc, char* argv[]){
         return parse_result;
     }
 
+    /* Ellenorizzuk, hogy az -r valoban mappat jelol, vagy hibasan lett megadva. */
     if (args.directory) {
         struct stat st;
         int ret = stat(args.input_file, &st);

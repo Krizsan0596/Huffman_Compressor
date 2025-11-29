@@ -36,6 +36,10 @@ int count_frequencies(char *data, long data_len, long *frequencies) {
     return 0;
 }
 
+/*
+ * Elkesziti a kimeneti fajl nevet: ha van kiterjesztes, kicsereli .huff-ra, kulonben hozzaadja.
+ * Siker eseten lefoglalt karakterlancot ad vissza, hiba eseten NULL-t.
+ */
 char* generate_output_file(char *input_file){
     char *dir_end = strrchr(input_file, '/');
     char *name_end;
@@ -90,7 +94,6 @@ Node construct_branch(Node *nodes, int left_index, int right_index) {
 /*
  * Osszevonja a rendezett leveleket, es Huffman fat epit beloluk.
  * A gyokerre mutato pointert adja vissza, vagy NULL-t, ha nincs egyetlen level sem.
- *
  * A keszitett csomopontokat a levelek utan rakja sorrendbe, igy mindig rendezett lesz a lista. 
  */
 Node* construct_tree(Node *nodes, long leaf_count) { // nodes is sorted
@@ -231,6 +234,9 @@ int compress(char *original_data, long data_len, Node *nodes, Node *root_node, c
     return 0;
 }
 
+/*
+ * A bemeneti fajlt vagy mappat beolvassa, felepit egy Huffman fat es kiirja a tomoritett adatot.
+ */
 int run_compression(Arguments args) {
     // Ha nem adott meg kimeneti fajlt a felhasznalo, general egyet.
     bool output_generated = false;
@@ -393,4 +399,3 @@ int run_compression(Arguments args) {
     free(data);
     return res != 0 ? res : write_res;
 }
-

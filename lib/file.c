@@ -22,6 +22,10 @@ long get_file_size(FILE *f){
     return size;
 } 
 
+/*
+ * A bajtok szamat nagyobb egysegkent jeleniti meg, kozben frissiti a bemenetul adott meretet.
+ * A valasztott mertekegyseg roviditeset adja vissza.
+ */
 const char* get_unit(int *bytes) {
     if (*bytes < 1024) return "B";
     *bytes /= 1024;

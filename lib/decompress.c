@@ -49,6 +49,10 @@ int decompress(Compressed_file *compressed, char *raw) {
     return 0;
 }
 
+/*
+ * Beolvassa a tomoritett fajlt, dekodolja a Huffman adatokat es kiirja a kapott tartalmat.
+ * Mappa eseten letrehozza a fajlszerkezetet, siker eseten 0-val ter vissza.
+ */
 int run_decompression(Arguments args) {
     Compressed_file *compressed_file = NULL;
     char *raw_data = NULL;
@@ -74,7 +78,7 @@ int run_decompression(Arguments args) {
             break;
         }
 
-        // A fajlbol beolvassa hogy mappa volt e tomoritve.
+        /* A tarolt flag jelzi, hogy mappa volt-e eredetileg: ez hatarozza meg a kimeneti utvonal felepitest. */
         args.directory = compressed_file->is_dir;
         
         if (compressed_file->original_size <= 0) {

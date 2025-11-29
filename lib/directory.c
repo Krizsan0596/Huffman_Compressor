@@ -23,6 +23,7 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
     Directory_item current_item = {0};
     
     while (true) {
+        /* Az elso hivaskor felvesszuk a gyoker mappat az archivumba, hogy a relativ utak megmaradjanak. */
         if (*current_index == 0) {
             Directory_item root = {0};
             root.is_dir = true;
@@ -58,6 +59,7 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
             if (dir == NULL) break;
             else if (strcmp(dir->d_name, ".") == 0 || strcmp(dir->d_name, "..") == 0) continue;
             
+            /* Osszerakjuk a talalt elem teljes eleresi utjat, hogy stat-tel tudjuk vizsgalni. */
             newpath = malloc(strlen(path) + strlen(dir->d_name) + 2);
             if (newpath == NULL) {
                 result = MALLOC_ERROR;
@@ -200,6 +202,7 @@ int extract_directory(char *path, Directory_item *archive, int archive_size, boo
         char *item_path = current->is_dir ? current->dir_path : current->file_path;
         char *full_path = malloc(strlen(path) + strlen(item_path) + 2);
         if (full_path == NULL) return MALLOC_ERROR;
+        /* Ha a felhasznalo adott kimeneti mappat, akkor ott ujrakezdjuk a mappa felepiteset. */
         strcpy(full_path, path);
         strcat(full_path, "/");
         strcat(full_path, item_path);
@@ -287,6 +290,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
         }
         
 
+        /* Kulso eleresi ut eseteten athelyezkedunk a szulo mappaba, hogy a tarolt utak relativak maradjanak. */
         if (sep != NULL && !(strncmp(input_file, "./", 2) == 0 || strncmp(input_file, "../", 3) == 0)) {
             if (sep == input_file) {
                 parent_dir = strdup("/");
@@ -317,7 +321,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
             }
         }
         
-        *directory_size = archive_directory((sep != NULL) ? file_name : input_file, &archive, &current_index, &archive_size);
+        *directory_size = archive_directory((file_name != NULL) ? file_name : input_file, &archive, &current_index, &archive_size);
         if (*directory_size < 0) {
             if (*directory_size == MALLOC_ERROR) {
                 printf("Nem sikerult lefoglalni a memoriat a mappa archivallasakor.\n");
@@ -344,6 +348,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
             break;
         }
         
+        /* Visszalepunk az eredeti mappaba. */
         if (sep != NULL) {
             if (chdir(current_path) != 0) {
                 printf("Nem sikerult kilepni a mappabol.\n");
