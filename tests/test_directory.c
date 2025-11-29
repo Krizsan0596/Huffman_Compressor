@@ -306,7 +306,12 @@ int main() {
             return 1;
         }
         
-        // Verify archive has expected items (root dir, subdir, 2 files = 4 items)
+        // Verify archive has expected items:
+        // 1. prep_test_dir/ (root directory)
+        // 2. prep_test_dir/subdir/ (subdirectory)
+        // 3. prep_test_dir/file1.txt (file)
+        // 4. prep_test_dir/subdir/file2.txt (file)
+        // Total: 4 items
         if (prep_archive_size != 4) {
             fprintf(stderr, "Error: expected 4 items in archive, got %d\n", prep_archive_size);
             free(data);
@@ -429,9 +434,12 @@ int main() {
             return 1;
         }
         
-        // Build path to compare - the extracted dir should be prep_output_dir/prep_test_dir
+        // Build path to compare - the extracted dir should be prep_output_dir/<dirname>
+        // Extract directory name from prep_test_dir (last component after last '/')
+        char *dirname = strrchr(prep_test_dir, '/');
+        dirname = (dirname != NULL) ? dirname + 1 : prep_test_dir;
         char extracted_path[1024];
-        snprintf(extracted_path, sizeof(extracted_path), "%s/prep_test_dir", prep_output_dir);
+        snprintf(extracted_path, sizeof(extracted_path), "%s/%s", prep_output_dir, dirname);
         
         // Compare directories
         if (compare_directories(prep_test_dir, extracted_path) != 0) {
