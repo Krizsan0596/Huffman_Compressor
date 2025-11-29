@@ -45,6 +45,11 @@ int read_raw(char file_name[], char** data){
     f = fopen(file_name, "rb");
     if (f == NULL) return FILE_READ_ERROR; // Not exists.
     long file_size = get_file_size(f);
+    if (file_size == 0) {
+        *data = NULL;
+        fclose(f);
+        return EMPTY_FILE;
+    }
     *data = (char*)malloc(file_size);
     if (*data == NULL) {
         fclose(f);

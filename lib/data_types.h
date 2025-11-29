@@ -63,7 +63,8 @@ typedef enum {
     DIRECTORY_OPEN_ERROR = -10,
     EMPTY_DIRECTORY = -11,
     MKDIR_ERROR = -12,
-    DIRECTORY_ERROR = -13
+    DIRECTORY_ERROR = -13,
+    EMPTY_FILE = -14
 } Error_code;
 
 typedef struct {

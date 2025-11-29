@@ -226,9 +226,12 @@ int compress(char *original_data, long data_len, Node *nodes, Node *root_node, c
 
     compressed_file->data_size = total_bits;
 
-    char *temp = realloc(compressed_file->compressed_data, ceil((double)total_bits / 8.0));
-    if (temp != NULL) {
-        compressed_file->compressed_data = temp;
+    long final_size = (long)ceil((double)total_bits / 8.0);
+    if (final_size > 0) {
+        char *temp = realloc(compressed_file->compressed_data, final_size);
+        if (temp != NULL) {
+            compressed_file->compressed_data = temp;
+        }
     }
 
     return 0;
@@ -265,11 +268,15 @@ int run_compression(Arguments args) {
     else {
         data_len = read_raw(args.input_file, &data);
         if (data_len < 0) {
-            printf("Nem sikerult megnyitni a fajlt (%s).\n", args.input_file);
+            if (data_len == EMPTY_FILE) {
+                printf("A fajl (%s) ures.\n", args.input_file);
+            } else {
+                printf("Nem sikerult megnyitni a fajlt (%s).\n", args.input_file);
+            }
             if (output_generated) {
                 free(args.output_file);
             }
-            return EIO;
+            return data_len;
         }
     }
 
