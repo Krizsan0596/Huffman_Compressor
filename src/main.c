@@ -160,6 +160,7 @@ static int prepare_directory(char *input_file, char **data, int *directory_size)
             file_name = strdup(sep + 1);
             if (file_name == NULL) {
                 res = MALLOC_ERROR;
+                break;
             }
             if (chdir(parent_dir) != 0) {
                 printf("Nem sikerult belepni a mappaba.\n");
@@ -342,6 +343,9 @@ int main(int argc, char* argv[]){
             data_len = read_raw(args.input_file, &data);
             if (data_len < 0) {
                 printf("Nem sikerult megnyitni a fajlt (%s).\n", args.input_file);
+                if (output_generated) {
+                    free(args.output_file);
+                }
                 return EIO;
             }
         }
