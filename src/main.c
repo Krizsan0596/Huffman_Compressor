@@ -134,7 +134,7 @@ static int prepare_directory(char *input_file, char **data, int *directory_size)
     while (true) {
         if (getcwd(current_path, sizeof(current_path)) == NULL) {
             printf("Nem sikerult elmenteni az utat.\n");
-            res = errno;
+            res = DIRECTORY_ERROR;
             break;
         }
         
@@ -163,7 +163,7 @@ static int prepare_directory(char *input_file, char **data, int *directory_size)
             }
             if (chdir(parent_dir) != 0) {
                 printf("Nem sikerult belepni a mappaba.\n");
-                res = errno;
+                res = DIRECTORY_ERROR;
                 break;
             }
         }
@@ -198,7 +198,7 @@ static int prepare_directory(char *input_file, char **data, int *directory_size)
         if (sep != NULL) {
             if (chdir(current_path) != 0) {
                 printf("Nem sikerult kilepni a mappabol.\n");
-                res = errno;
+                res = DIRECTORY_ERROR;
                 break;
             }
         }
@@ -240,14 +240,14 @@ static int restore_directory(char *raw_data, char *output_file, bool force) {
             } else {
                 printf("Nem sikerult a tomoritett mappa beolvasasa.\n");
             }
-            res = EIO;
+            res = archive_size;
             break;
         }
         
         if (output_file != NULL) {
             if (mkdir(output_file, 0755) != 0 && errno != EEXIST) {
                 printf("Nem sikerult letrehozni a kimeneti mappat.\n");
-                res = EIO;
+                res = MKDIR_ERROR;
                 break;
             }
         }
@@ -261,7 +261,7 @@ static int restore_directory(char *raw_data, char *output_file, bool force) {
             } else {
                 printf("Nem sikerult a mappa kitomoritese.\n");
             }
-            res = EIO;
+            res = ret;
             break;
         }
         break;

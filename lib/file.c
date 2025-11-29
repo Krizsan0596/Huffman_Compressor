@@ -47,11 +47,12 @@ int read_raw(char file_name[], char** data){
         return MALLOC_ERROR;
     }
     size_t read_size = fread(*data, sizeof(char), file_size, f);
-    fclose(f);
     if (read_size != file_size) {
         free(*data);
+        fclose(f);
         return FILE_READ_ERROR;
     }
+    fclose(f);
     return read_size;
 }
 

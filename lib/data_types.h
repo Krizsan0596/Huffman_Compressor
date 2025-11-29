@@ -62,7 +62,8 @@ typedef enum {
     SCANF_FAILED = -9,
     DIRECTORY_OPEN_ERROR = -10,
     EMPTY_DIRECTORY = -11,
-    MKDIR_ERROR = -12
+    MKDIR_ERROR = -12,
+    DIRECTORY_ERROR = -13
 } ErrorCode;
 
 typedef struct {
