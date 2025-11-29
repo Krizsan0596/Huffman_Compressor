@@ -252,5 +252,280 @@ int main() {
     snprintf(command, sizeof(command), "rm -rf %s", test_dir);
     system(command);
 
+    // ==========================================
+    // Test prepare_directory function
+    // ==========================================
+    printf("Testing prepare_directory function...\n");
+
+    // Create test directory for prepare_directory tests
+    char *prep_test_dir = "../tests/prep_test_dir";
+    char *prep_output_dir = "prep_output_dir";
+    
+    mkdir("../tests", 0755);
+    mkdir("../tests/prep_test_dir", 0755);
+    mkdir("../tests/prep_test_dir/subdir", 0755);
+    
+    FILE *pf1 = fopen("../tests/prep_test_dir/file1.txt", "w");
+    if (pf1) {
+        fprintf(pf1, "This is file1 for prepare_directory test.\n");
+        fclose(pf1);
+    }
+    FILE *pf2 = fopen("../tests/prep_test_dir/subdir/file2.txt", "w");
+    if (pf2) {
+        fprintf(pf2, "This is file2 for prepare_directory test.\n");
+        fclose(pf2);
+    }
+
+    // Test 1: prepare_directory with relative path
+    printf("  Test 1: prepare_directory with relative path...\n");
+    {
+        char *data = NULL;
+        int directory_size = 0;
+        int result = prepare_directory(prep_test_dir, &data, &directory_size);
+        if (result < 0) {
+            fprintf(stderr, "Error: prepare_directory failed with relative path, code: %d\n", result);
+            return 1;
+        }
+        if (data == NULL) {
+            fprintf(stderr, "Error: prepare_directory returned NULL data\n");
+            return 1;
+        }
+        if (directory_size <= 0) {
+            fprintf(stderr, "Error: prepare_directory returned invalid directory_size: %d\n", directory_size);
+            free(data);
+            return 1;
+        }
+        printf("    Relative path test passed. Directory size: %d bytes\n", directory_size);
+        
+        // Verify we can deserialize the archive
+        Directory_item *prep_archive = NULL;
+        int prep_archive_size = deserialize_archive(&prep_archive, data);
+        if (prep_archive_size < 0) {
+            fprintf(stderr, "Error: deserialize_archive failed after prepare_directory\n");
+            free(data);
+            return 1;
+        }
+        
+        // Verify archive has expected items (root dir, subdir, 2 files = 4 items)
+        if (prep_archive_size != 4) {
+            fprintf(stderr, "Error: expected 4 items in archive, got %d\n", prep_archive_size);
+            free(data);
+            for (int i = 0; i < prep_archive_size; i++) {
+                if (prep_archive[i].is_dir) {
+                    free(prep_archive[i].dir_path);
+                } else {
+                    free(prep_archive[i].file_path);
+                    free(prep_archive[i].file_data);
+                }
+            }
+            free(prep_archive);
+            return 1;
+        }
+        
+        // Cleanup
+        free(data);
+        for (int i = 0; i < prep_archive_size; i++) {
+            if (prep_archive[i].is_dir) {
+                free(prep_archive[i].dir_path);
+            } else {
+                free(prep_archive[i].file_path);
+                free(prep_archive[i].file_data);
+            }
+        }
+        free(prep_archive);
+    }
+    
+    // Test 2: prepare_directory with absolute path (includes full round-trip verification)
+    printf("  Test 2: prepare_directory with absolute path...\n");
+    {
+        // Get absolute path to test directory
+        char abs_path[1024];
+        char saved_cwd[1024];
+        if (getcwd(saved_cwd, sizeof(saved_cwd)) == NULL) {
+            perror("getcwd error");
+            return 1;
+        }
+        if (chdir(prep_test_dir) != 0) {
+            perror("chdir error");
+            return 1;
+        }
+        if (getcwd(abs_path, sizeof(abs_path)) == NULL) {
+            perror("getcwd error");
+            return 1;
+        }
+        if (chdir(saved_cwd) != 0) {
+            perror("chdir error");
+            return 1;
+        }
+        
+        char *data = NULL;
+        int directory_size = 0;
+        int result = prepare_directory(abs_path, &data, &directory_size);
+        if (result < 0) {
+            fprintf(stderr, "Error: prepare_directory failed with absolute path, code: %d\n", result);
+            return 1;
+        }
+        if (data == NULL) {
+            fprintf(stderr, "Error: prepare_directory returned NULL data for absolute path\n");
+            return 1;
+        }
+        if (directory_size <= 0) {
+            fprintf(stderr, "Error: prepare_directory returned invalid directory_size for absolute path: %d\n", directory_size);
+            free(data);
+            return 1;
+        }
+        printf("    Absolute path test passed. Directory size: %d bytes\n", directory_size);
+        
+        // Verify we can deserialize
+        Directory_item *prep_archive = NULL;
+        int prep_archive_size = deserialize_archive(&prep_archive, data);
+        if (prep_archive_size < 0) {
+            fprintf(stderr, "Error: deserialize_archive failed after prepare_directory with absolute path\n");
+            free(data);
+            return 1;
+        }
+        
+        // With absolute path, paths should be stored relative to the parent directory
+        // So we can extract and verify the round-trip works
+        snprintf(command, sizeof(command), "rm -rf %s", prep_output_dir);
+        system(command);
+        mkdir(prep_output_dir, 0755);
+        
+        if (chdir(prep_output_dir) != 0) {
+            perror("chdir error");
+            free(data);
+            for (int i = 0; i < prep_archive_size; i++) {
+                if (prep_archive[i].is_dir) {
+                    free(prep_archive[i].dir_path);
+                } else {
+                    free(prep_archive[i].file_path);
+                    free(prep_archive[i].file_data);
+                }
+            }
+            free(prep_archive);
+            return 1;
+        }
+        
+        if (extract_directory(".", prep_archive, prep_archive_size, true) != 0) {
+            if (chdir(original_cwd) != 0) {
+                perror("chdir error");
+            }
+            fprintf(stderr, "Error: extract_directory failed for absolute path archive\n");
+            free(data);
+            for (int i = 0; i < prep_archive_size; i++) {
+                if (prep_archive[i].is_dir) {
+                    free(prep_archive[i].dir_path);
+                } else {
+                    free(prep_archive[i].file_path);
+                    free(prep_archive[i].file_data);
+                }
+            }
+            free(prep_archive);
+            return 1;
+        }
+        
+        if (chdir(original_cwd) != 0) {
+            perror("chdir error");
+            return 1;
+        }
+        
+        // Build path to compare - the extracted dir should be prep_output_dir/prep_test_dir
+        char extracted_path[1024];
+        snprintf(extracted_path, sizeof(extracted_path), "%s/prep_test_dir", prep_output_dir);
+        
+        // Compare directories
+        if (compare_directories(prep_test_dir, extracted_path) != 0) {
+            fprintf(stderr, "Error: Directories do not match after prepare_directory with absolute path\n");
+            free(data);
+            for (int i = 0; i < prep_archive_size; i++) {
+                if (prep_archive[i].is_dir) {
+                    free(prep_archive[i].dir_path);
+                } else {
+                    free(prep_archive[i].file_path);
+                    free(prep_archive[i].file_data);
+                }
+            }
+            free(prep_archive);
+            return 1;
+        }
+        printf("    Absolute path round-trip verification passed.\n");
+        
+        // Cleanup
+        free(data);
+        for (int i = 0; i < prep_archive_size; i++) {
+            if (prep_archive[i].is_dir) {
+                free(prep_archive[i].dir_path);
+            } else {
+                free(prep_archive[i].file_path);
+                free(prep_archive[i].file_data);
+            }
+        }
+        free(prep_archive);
+        snprintf(command, sizeof(command), "rm -rf %s", prep_output_dir);
+        system(command);
+    }
+    
+    // Test 3: prepare_directory with non-existent path (error handling)
+    printf("  Test 3: prepare_directory with non-existent path...\n");
+    {
+        char *data = NULL;
+        int directory_size = 0;
+        int result = prepare_directory("./non_existent_directory_12345", &data, &directory_size);
+        if (result >= 0) {
+            fprintf(stderr, "Error: prepare_directory should fail for non-existent directory\n");
+            if (data != NULL) free(data);
+            return 1;
+        }
+        if (data != NULL) {
+            fprintf(stderr, "Error: data should be NULL after failure\n");
+            free(data);
+            return 1;
+        }
+        printf("    Non-existent path error handling test passed. Error code: %d\n", result);
+    }
+    
+    // Test 4: Verify working directory is restored after prepare_directory
+    printf("  Test 4: Verify working directory is preserved...\n");
+    {
+        char cwd_before[1024];
+        char cwd_after[1024];
+        
+        if (getcwd(cwd_before, sizeof(cwd_before)) == NULL) {
+            perror("getcwd error");
+            return 1;
+        }
+        
+        char *data = NULL;
+        int directory_size = 0;
+        int result = prepare_directory(prep_test_dir, &data, &directory_size);
+        
+        if (getcwd(cwd_after, sizeof(cwd_after)) == NULL) {
+            perror("getcwd error");
+            if (data != NULL) free(data);
+            return 1;
+        }
+        
+        if (result < 0) {
+            fprintf(stderr, "Error: prepare_directory failed, code: %d\n", result);
+            return 1;
+        }
+        
+        if (strcmp(cwd_before, cwd_after) != 0) {
+            fprintf(stderr, "Error: Working directory changed after prepare_directory!\n");
+            fprintf(stderr, "  Before: %s\n", cwd_before);
+            fprintf(stderr, "  After:  %s\n", cwd_after);
+            free(data);
+            return 1;
+        }
+        printf("    Working directory preservation test passed.\n");
+        free(data);
+    }
+    
+    // Cleanup test directory
+    snprintf(command, sizeof(command), "rm -rf %s", prep_test_dir);
+    system(command);
+    
+    printf("All prepare_directory tests passed!\n");
+
     return 0;
 }
