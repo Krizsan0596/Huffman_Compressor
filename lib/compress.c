@@ -4,9 +4,11 @@
 #include <math.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include "file.h"
 #include "compress.h"
 #include "data_types.h"
+#include "directory.h"
 #include "debugmalloc.h"
 
 // Segedfuggveny a qsort rendezeshez
@@ -227,5 +229,168 @@ int compress(char *original_data, long data_len, Node *nodes, Node *root_node, c
     }
 
     return 0;
+}
+
+int run_compression(Arguments args) {
+    // Ha nem adott meg kimeneti fajlt a felhasznalo, general egyet.
+    bool output_generated = false;
+    if (args.output_file == NULL) {
+        output_generated = true;
+        args.output_file = generate_output_file(args.input_file);
+        if (args.output_file == NULL) {
+            printf("Nem sikerult lefoglalni a memoriat.\n");
+            return ENOMEM;
+        }
+    }
+    char *data;
+    int data_len = 0;
+    int directory_size = 0;
+
+    if (args.directory) {
+        data_len = prepare_directory(args.input_file, &data, &directory_size);
+        if (data_len < 0) {
+            if (output_generated) {
+                free(args.output_file);
+            }
+            return data_len;
+        }
+    }
+    else {
+        data_len = read_raw(args.input_file, &data);
+        if (data_len < 0) {
+            printf("Nem sikerult megnyitni a fajlt (%s).\n", args.input_file);
+            if (output_generated) {
+                free(args.output_file);
+            }
+            return EIO;
+        }
+    }
+
+    int write_res = 0;
+    long *frequencies = NULL;
+    Compressed_file *compressed_file = NULL;
+    Node *nodes = NULL;
+    long tree_size = 0;
+    char **cache = NULL;
+    int res = 0;
+    
+    // A while ciklusbol a vegen garantaltan ki break-elunk, de ha hiba tortenik, akkor a vegare ugrunk.
+    while (true) {
+        // Megszamolja a bemeneti adat bajtjainak gyakorisagat.
+        frequencies = calloc(256, sizeof(long));
+        if (frequencies == NULL) {
+            printf("Nem sikerult lefoglalni a memoriat.\n");
+            res = MALLOC_ERROR;
+            break;
+        }
+        count_frequencies(data, data_len, frequencies);
+
+        int leaf_count = 0;
+        for (int i = 0; i < 256; i++) {
+            if (frequencies[i] != 0) {
+                leaf_count++;
+            }
+        }
+
+        if (leaf_count == 0) {
+            printf("A fajl (%s) ures.\n", args.input_file);
+            res = SUCCESS;
+            break;
+        }
+
+        nodes = malloc((2 * leaf_count - 1) * sizeof(Node));
+        if (nodes == NULL) {
+            printf("Nem sikerult lefoglalni a memoriat.\n");
+            res = MALLOC_ERROR;
+            break;
+        }
+
+        int j = 0;
+        for (int i = 0; i < 256; i++) {
+            if (frequencies[i] != 0) {
+                nodes[j] = construct_leaf(frequencies[i], (char)i);
+                j++;
+            }
+        }
+        free(frequencies);
+        frequencies = NULL;
+
+        // Felepiti a Huffman fat a rendezett levelek tombjebol. 
+        sort_nodes(nodes, leaf_count);
+        Node *root_node = construct_tree(nodes, leaf_count);
+
+        if (root_node != NULL) {
+            tree_size = (root_node - nodes) + 1;
+        } else {
+            printf("Nem sikerult a Huffman fa felepitese.\n");
+            res = TREE_ERROR;
+            break;
+        }
+        cache = calloc(256, sizeof(char *));
+        if (cache == NULL) {
+            printf("Nem sikerult lefoglalni a memoriat.\n");
+            res = MALLOC_ERROR;
+            break;
+        }
+
+        compressed_file = malloc(sizeof(Compressed_file));
+        if (compressed_file == NULL) {
+            printf("Nem sikerult lefoglalni a memoriat.\n");
+            res = MALLOC_ERROR;
+            break;
+        }
+        
+        // Tomoriti a beolvasott adatokat a compressed_file strukturaba.
+        int compress_res = compress(data, data_len, nodes, root_node, cache, compressed_file);
+        if (compress_res != 0) {
+            printf("Nem sikerult a tomorites.\n");
+            res = compress_res;
+            break;
+        }
+
+        if (args.directory) compressed_file->is_dir = true;
+        else compressed_file->is_dir = false;
+
+        compressed_file->huffman_tree = nodes;
+        compressed_file->tree_size = tree_size * sizeof(Node);
+        compressed_file->original_file = args.input_file;
+        compressed_file->original_size = data_len;
+        compressed_file->file_name = args.output_file;
+        write_res = write_compressed(compressed_file, args.force);
+        if (write_res < 0) {
+            if (write_res == NO_OVERWRITE) {
+                printf("A fajlt nem irtam felul, nem tortent meg a tomorites.\n");
+                write_res = ECANCELED;
+            } else {
+                printf("Nem sikerult kiirni a kimeneti fajlt (%s).\n", compressed_file->file_name);
+                write_res = EIO;
+            }
+        }
+        else {
+            printf("Tomorites kesz.\n"
+                    "Eredeti meret:    %d%s\n"
+                    "Tomoritett meret: %d%s\n"
+                    "Tomorites aranya: %.2f%%\n", data_len, get_unit(&data_len), 
+                                                write_res, get_unit(&write_res), 
+                                                (double)write_res/(args.directory ? directory_size : data_len) * 100);
+        }
+        break;
+    }
+    free(frequencies);
+    if (output_generated) free(args.output_file);
+    free(nodes);
+    if (compressed_file != NULL) {
+        free(compressed_file->compressed_data);
+        free(compressed_file);
+    }
+
+    for (int i = 0; i < 256; ++i) {
+        if (cache[i] != NULL) {
+            free(cache[i]);
+        }
+    }
+    free(cache);
+    free(data);
+    return res != 0 ? res : write_res;
 }
 

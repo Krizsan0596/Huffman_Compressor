@@ -3,8 +3,11 @@
 #include <string.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include "file.h"
 #include "decompress.h"
+#include "directory.h"
 
 /*
  * A Huffman fat bejarva ujra eloallitja az eredeti adatokat bitrol bitre.
@@ -44,4 +47,81 @@ int decompress(Compressed_file *compressed, char *raw) {
     }
 
     return 0;
+}
+
+int run_decompression(Arguments args) {
+    Compressed_file *compressed_file = NULL;
+    char *raw_data = NULL;
+    int res = 0;
+    
+    while (true) {
+        compressed_file = calloc(1, sizeof(Compressed_file));
+        if (compressed_file == NULL) {
+            printf("Nem sikerult lefoglalni a memoriat.\n");
+            res = ENOMEM;
+            break;
+        }
+        
+        int read_res = read_compressed(args.input_file, compressed_file);
+        if (read_res != 0) {
+            if (read_res == FILE_MAGIC_ERROR) {
+                printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.\n", args.input_file);
+                res = EBADF;
+                break;
+            }
+            printf("Nem sikerult beolvasni a tomoritett fajlt (%s).\n", args.input_file);
+            res = EIO;
+            break;
+        }
+
+        // A fajlbol beolvassa hogy mappa volt e tomoritve.
+        args.directory = compressed_file->is_dir;
+        
+        if (compressed_file->original_size <= 0) {
+            printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.\n", args.input_file);
+            res = EINVAL;
+            break;
+        }
+        
+        raw_data = malloc(compressed_file->original_size * sizeof(char));
+        if (raw_data == NULL) {
+            printf("Nem sikerult lefoglalni a memoriat.\n");
+            res = ENOMEM;
+            break;
+        }
+        
+        int decompress_result = decompress(compressed_file, raw_data);
+        if (decompress_result != 0) {
+            printf("Nem sikerult a kitomorites.\n");
+            res = EIO;
+            break;
+        }
+
+        if (args.directory) {
+            int ret = restore_directory(raw_data, args.output_file, args.force);
+            if (ret != 0) {
+                res = ret;
+                break;
+            }
+        }
+        else {
+            int write_res = write_raw(args.output_file != NULL ? args.output_file : compressed_file->original_file, raw_data, compressed_file->original_size, args.force);
+            if (write_res < 0) {
+                printf("Hiba tortent a kimeneti fajl (%s) irasa kozben.\n", args.output_file != NULL ? args.output_file : compressed_file->original_file);
+                res = EIO;
+                break;
+            }
+        }
+        break;
+    }
+    
+    free(raw_data);
+    if (compressed_file != NULL) {
+        free(compressed_file->file_name);
+        free(compressed_file->original_file);
+        free(compressed_file->huffman_tree);
+        free(compressed_file->compressed_data);
+        free(compressed_file);
+    }
+    return res;
 }
