@@ -275,6 +275,7 @@ int deserialize_archive(Directory_item **archive, char *buffer) {
 int prepare_directory(char *input_file, char **data, int *directory_size) {
     char current_path[1000];
     char *sep = strrchr(input_file, '/');
+    bool relative_path = (strncmp(input_file, "./", 2) == 0 || strncmp(input_file, "../", 3) == 0);
     char *parent_dir = NULL;
     char *file_name = NULL;
     Directory_item *archive = NULL;
@@ -291,7 +292,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
         
 
         /* Kulso eleresi ut eseteten athelyezkedunk a szulo mappaba, hogy a tarolt utak relativak maradjanak. */
-        if (sep != NULL && !(strncmp(input_file, "./", 2) == 0 || strncmp(input_file, "../", 3) == 0)) {
+        if (sep != NULL && !relative_path) {
             if (sep == input_file) {
                 parent_dir = strdup("/");
                 if (parent_dir == NULL) {
@@ -349,7 +350,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
         }
         
         /* Visszalepunk az eredeti mappaba. */
-        if (sep != NULL && !(strncmp(input_file, "./", 2) == 0 || strncmp(input_file, "../", 3) == 0)) {
+        if (sep != NULL && !relative_path) {
             if (chdir(current_path) != 0) {
                 printf("Nem sikerult kilepni a mappabol.\n");
                 res = DIRECTORY_ERROR;
