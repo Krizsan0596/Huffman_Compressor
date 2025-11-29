@@ -38,7 +38,7 @@ static void print_usage(const char *prog_name) {
  * Parancssori opciok feldolgozasa: egy mod valaszthato, az -o a kimenetet, az -f a felulirast kezeli.
  * Az elso nem kapcsolos argumentum lesz a bemeneti fajl.
  */
-static int parse_arguments(int argc, char* argv[], Arguments *args) {
+int parse_arguments(int argc, char* argv[], Arguments *args) {
     args->compress_mode = false;
     args->extract_mode = false;
     args->force = false;

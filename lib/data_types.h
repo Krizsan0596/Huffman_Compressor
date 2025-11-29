@@ -14,12 +14,12 @@ static const char magic[4] = {'H', 'U', 'F', 'F'};
 typedef enum {
     LEAF,
     BRANCH
-} node_type;
+} Node_type;
 
 
 // A Huffman fa egy pontja: unionban tarolja a karaktert vagy a ket gyermek indexet.
 typedef struct Node {
-    node_type type;
+    Node_type type;
     long frequency;
     union {
         char data;
@@ -64,7 +64,7 @@ typedef enum {
     EMPTY_DIRECTORY = -11,
     MKDIR_ERROR = -12,
     DIRECTORY_ERROR = -13
-} ErrorCode;
+} Error_code;
 
 typedef struct {
     bool is_dir;
