@@ -4,5 +4,6 @@
 #include "data_types.h"
 
 int decompress(Compressed_file *compressed, char *raw);
+int run_decompression(Arguments args);
 
 #endif
