@@ -362,8 +362,7 @@ int run_compression(Arguments args) {
             break;
         }
 
-        if (args.directory) compressed_file->is_dir = true;
-        else compressed_file->is_dir = false;
+        compressed_file->is_dir = args.directory;
 
         compressed_file->huffman_tree = nodes;
         compressed_file->tree_size = tree_size * sizeof(Node);

@@ -82,6 +82,7 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
                 subdir.dir_path = strdup(newpath);
                 if (subdir.dir_path == NULL) {
                     result = MALLOC_ERROR;
+                    current_item = subdir;
                     break;
                 }
                 Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
@@ -106,6 +107,7 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
                 file.file_path = strdup(newpath);
                 if (file.file_path == NULL) {
                     result = MALLOC_ERROR;
+                    current_item = file;
                     break;
                 }
                 file.file_size = read_raw(newpath, &file.file_data);
