@@ -229,6 +229,10 @@ int compress(char *original_data, long data_len, Node *nodes, Node *root_node, c
     long final_size = (long)ceil((double)total_bits / 8.0);
     if (final_size > 0) {
         char *temp = realloc(compressed_file->compressed_data, final_size);
+        /* If realloc fails, we intentionally keep using the original (larger) buffer.
+         * This is safe because the compression was successful and the oversized
+         * buffer still contains valid data - it's just not shrunk to the optimal size.
+         * No memory leak occurs since the original pointer remains valid. */
         if (temp != NULL) {
             compressed_file->compressed_data = temp;
         }
