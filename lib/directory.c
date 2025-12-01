@@ -336,6 +336,10 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
                 printf("Nem sikerult a mappa archivallasa.\n");
             }
             res = *directory_size;
+            /* Visszalepunk az eredeti mappaba hibaeseten is. */
+            if (sep != NULL && !relative_path) {
+                chdir(current_path);
+            }
             break;
         }
         
@@ -347,6 +351,10 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
                 printf("A mappa ures.\n");
             } else {
                 printf("Nem sikerult a mappa szerializalasa.\n");
+            }
+            /* Visszalepunk az eredeti mappaba hibaeseten is. */
+            if (sep != NULL && !relative_path) {
+                chdir(current_path);
             }
             break;
         }

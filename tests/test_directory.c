@@ -534,6 +534,184 @@ int main() {
     system(command);
     
     printf("All prepare_directory tests passed!\n");
+    
+    // ==========================================
+    // Test restore_directory function
+    // ==========================================
+    printf("Testing restore_directory function...\n");
+    
+    // Create test directory for restore_directory tests
+    char *restore_test_dir_rel = "../tests/restore_test_dir";
+    char *restore_output_dir = "restore_output_dir";
+    
+    mkdir("../tests", 0755);
+    mkdir("../tests/restore_test_dir", 0755);
+    mkdir("../tests/restore_test_dir/subdir", 0755);
+    
+    FILE *rf1 = fopen("../tests/restore_test_dir/file1.txt", "w");
+    if (rf1) {
+        fprintf(rf1, "This is file1 for restore_directory test.\n");
+        fclose(rf1);
+    }
+    FILE *rf2 = fopen("../tests/restore_test_dir/subdir/file2.txt", "w");
+    if (rf2) {
+        fprintf(rf2, "This is file2 for restore_directory test.\n");
+        fclose(rf2);
+    }
+    
+    // Get absolute path to the test directory for proper serialization
+    char restore_abs_path[1024];
+    char restore_saved_cwd[1024];
+    if (getcwd(restore_saved_cwd, sizeof(restore_saved_cwd)) == NULL) {
+        perror("getcwd error");
+        return 1;
+    }
+    if (chdir(restore_test_dir_rel) != 0) {
+        perror("chdir error");
+        return 1;
+    }
+    if (getcwd(restore_abs_path, sizeof(restore_abs_path)) == NULL) {
+        perror("getcwd error");
+        return 1;
+    }
+    if (chdir(restore_saved_cwd) != 0) {
+        perror("chdir error");
+        return 1;
+    }
+    
+    // Test 1: Basic restore_directory functionality
+    printf("  Test 1: Basic restore_directory functionality...\n");
+    {
+        // First, use prepare_directory with absolute path to serialize the directory
+        char *data = NULL;
+        int directory_size = 0;
+        int result = prepare_directory(restore_abs_path, &data, &directory_size);
+        if (result < 0) {
+            fprintf(stderr, "Error: prepare_directory failed, code: %d\n", result);
+            return 1;
+        }
+        
+        // Clean output directory
+        snprintf(command, sizeof(command), "rm -rf %s", restore_output_dir);
+        system(command);
+        
+        // Use restore_directory to extract
+        result = restore_directory(data, restore_output_dir, true);
+        if (result != 0) {
+            fprintf(stderr, "Error: restore_directory failed, code: %d\n", result);
+            free(data);
+            return 1;
+        }
+        
+        // Extract directory name from restore_abs_path (last component after last '/')
+        char *dir_name = strrchr(restore_abs_path, '/');
+        dir_name = (dir_name != NULL) ? dir_name + 1 : restore_abs_path;
+        char extracted_path[1024];
+        snprintf(extracted_path, sizeof(extracted_path), "%s/%s", restore_output_dir, dir_name);
+        
+        // Verify extraction by comparing directories
+        if (compare_directories(restore_test_dir_rel, extracted_path) != 0) {
+            fprintf(stderr, "Error: Directories do not match after restore_directory\n");
+            free(data);
+            return 1;
+        }
+        
+        printf("    Basic restore_directory test passed.\n");
+        free(data);
+        
+        // Cleanup
+        snprintf(command, sizeof(command), "rm -rf %s", restore_output_dir);
+        system(command);
+    }
+    
+    // Test 2: restore_directory with NULL output path (restore to current directory)
+    printf("  Test 2: restore_directory with NULL output path...\n");
+    {
+        char *data = NULL;
+        int directory_size = 0;
+        int result = prepare_directory(restore_abs_path, &data, &directory_size);
+        if (result < 0) {
+            fprintf(stderr, "Error: prepare_directory failed, code: %d\n", result);
+            return 1;
+        }
+        
+        // Extract directory name
+        char *dir_name = strrchr(restore_abs_path, '/');
+        dir_name = (dir_name != NULL) ? dir_name + 1 : restore_abs_path;
+        
+        // Clean any existing directory with same name in current directory
+        snprintf(command, sizeof(command), "rm -rf ./%s", dir_name);
+        system(command);
+        
+        // Use restore_directory with NULL output
+        result = restore_directory(data, NULL, true);
+        if (result != 0) {
+            fprintf(stderr, "Error: restore_directory with NULL output failed, code: %d\n", result);
+            free(data);
+            return 1;
+        }
+        
+        // Verify extraction
+        if (compare_directories(restore_test_dir_rel, dir_name) != 0) {
+            fprintf(stderr, "Error: Directories do not match after restore_directory with NULL output\n");
+            free(data);
+            snprintf(command, sizeof(command), "rm -rf ./%s", dir_name);
+            system(command);
+            return 1;
+        }
+        
+        printf("    restore_directory with NULL output test passed.\n");
+        free(data);
+        
+        // Cleanup
+        snprintf(command, sizeof(command), "rm -rf ./%s", dir_name);
+        system(command);
+    }
+    
+    // Test 3: restore_directory with force flag (overwrite existing)
+    printf("  Test 3: restore_directory with force flag...\n");
+    {
+        char *data = NULL;
+        int directory_size = 0;
+        int result = prepare_directory(restore_abs_path, &data, &directory_size);
+        if (result < 0) {
+            fprintf(stderr, "Error: prepare_directory failed, code: %d\n", result);
+            return 1;
+        }
+        
+        // Clean output directory and create fresh
+        snprintf(command, sizeof(command), "rm -rf %s", restore_output_dir);
+        system(command);
+        
+        // First extraction
+        result = restore_directory(data, restore_output_dir, true);
+        if (result != 0) {
+            fprintf(stderr, "Error: first restore_directory failed, code: %d\n", result);
+            free(data);
+            return 1;
+        }
+        
+        // Second extraction with force flag (should overwrite)
+        result = restore_directory(data, restore_output_dir, true);
+        if (result != 0) {
+            fprintf(stderr, "Error: second restore_directory with force failed, code: %d\n", result);
+            free(data);
+            return 1;
+        }
+        
+        printf("    restore_directory with force flag test passed.\n");
+        free(data);
+        
+        // Cleanup
+        snprintf(command, sizeof(command), "rm -rf %s", restore_output_dir);
+        system(command);
+    }
+    
+    // Cleanup test directory
+    snprintf(command, sizeof(command), "rm -rf %s", restore_test_dir_rel);
+    system(command);
+    
+    printf("All restore_directory tests passed!\n");
 
     return 0;
 }
