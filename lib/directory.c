@@ -303,12 +303,12 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
     Directory_item *archive = NULL;
     int archive_size = 0;
     int current_index = 0;
-    int res = 0;
+    int data_len = 0;  /* Stores the serialized data length on success, or negative error code on failure */
     
     while (true) {
         if (getcwd(current_path, sizeof(current_path)) == NULL) {
             printf("Nem sikerult elmenteni az utat.\n");
-            res = DIRECTORY_ERROR;
+            data_len = DIRECTORY_ERROR;
             break;
         }
         
@@ -318,7 +318,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
             if (sep == input_file) {
                 parent_dir = strdup("/");
                 if (parent_dir == NULL) {
-                    res = MALLOC_ERROR;
+                    data_len = MALLOC_ERROR;
                     break;
                 }
             }
@@ -326,7 +326,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
                 int parent_dir_len = sep - input_file;
                 parent_dir = malloc(parent_dir_len + 1);
                 if (parent_dir == NULL) {
-                    res = MALLOC_ERROR;
+                    data_len = MALLOC_ERROR;
                     break;
                 }
                 strncpy(parent_dir, input_file, parent_dir_len);
@@ -334,12 +334,12 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
             }
             file_name = strdup(sep + 1);
             if (file_name == NULL) {
-                res = MALLOC_ERROR;
+                data_len = MALLOC_ERROR;
                 break;
             }
             if (chdir(parent_dir) != 0) {
                 printf("Nem sikerult belepni a mappaba.\n");
-                res = DIRECTORY_ERROR;
+                data_len = DIRECTORY_ERROR;
                 break;
             }
         }
@@ -355,22 +355,22 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
             } else {
                 printf("Nem sikerult a mappa archivallasa.\n");
             }
-            res = *directory_size;
+            data_len = *directory_size;
             /* Visszalepunk az eredeti mappaba hibaeseten is. */
             if (sep != NULL && !relative_path) {
                 if (chdir(current_path) != 0) {
                     printf("Nem sikerult kilepni a mappabol.\n");
-                    res = DIRECTORY_ERROR;
+                    data_len = DIRECTORY_ERROR;
                 }
             }
             break;
         }
         
-        res = serialize_archive(archive, archive_size, data);
-        if (res < 0) {
-            if (res == MALLOC_ERROR) {
+        data_len = serialize_archive(archive, archive_size, data);
+        if (data_len < 0) {
+            if (data_len == MALLOC_ERROR) {
                 printf("Nem sikerult lefoglalni a memoriat a szerializalaskor.\n");
-            } else if (res == EMPTY_DIRECTORY) {
+            } else if (data_len == EMPTY_DIRECTORY) {
                 printf("A mappa ures.\n");
             } else {
                 printf("Nem sikerult a mappa szerializalasa.\n");
@@ -378,7 +378,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
             if (sep != NULL && !relative_path) {
                 if (chdir(current_path) != 0) {
                     printf("Nem sikerult kilepni a mappabol.\n");
-                    res = DIRECTORY_ERROR;
+                    data_len = DIRECTORY_ERROR;
                     if (*data != NULL) {
                         free(*data);
                         *data = NULL;
@@ -392,7 +392,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
         if (sep != NULL && !relative_path) {
             if (chdir(current_path) != 0) {
                 printf("Nem sikerult kilepni a mappabol.\n");
-                res = DIRECTORY_ERROR;
+                data_len = DIRECTORY_ERROR;
                 if (*data != NULL) {
                     free(*data);
                     *data = NULL;
@@ -417,7 +417,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
     free(parent_dir);
     free(file_name);
     
-    return res;
+    return data_len;
 }
 
 /*
