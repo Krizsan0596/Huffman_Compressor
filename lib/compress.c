@@ -233,11 +233,9 @@ int compress(char *original_data, long data_len, Node *nodes, Node *root_node, c
     compressed_file->data_size = total_bits;
 
     long final_size = (long)ceil((double)total_bits / 8.0);
-    if (final_size > 0) {
-        char *temp = realloc(compressed_file->compressed_data, final_size);
-        if (temp != NULL) {
-            compressed_file->compressed_data = temp;
-        }
+    char *temp = realloc(compressed_file->compressed_data, final_size);
+    if (temp != NULL) {
+        compressed_file->compressed_data = temp;
     }
 
     return 0;

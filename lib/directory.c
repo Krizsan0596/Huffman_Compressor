@@ -312,8 +312,6 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
             data_len = DIRECTORY_ERROR;
             break;
         }
-        
-
         /* Kulso eleresi ut eseteten athelyezkedunk a szulo mappaba, hogy a tarolt utak relativak maradjanak. */
         if (sep != NULL && !relative_path) {
             if (sep == input_file) {
