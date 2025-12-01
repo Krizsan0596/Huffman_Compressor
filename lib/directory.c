@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdio.h>
+#include <limits.h>
 
 /*
  * Rekurzivan bejarja a mappat es fajlonkent egy tombbe menti az adatokat.
@@ -295,7 +296,7 @@ int deserialize_archive(Directory_item **archive, char *buffer) {
  * Sikeres muveletek eseten a szerializalt adat hosszat adja vissza, hiba eseten negativ erteket.
  */
 int prepare_directory(char *input_file, char **data, int *directory_size) {
-    char current_path[1000];
+    char current_path[PATH_MAX];
     char *sep = strrchr(input_file, '/');
     bool relative_path = (strncmp(input_file, "./", 2) == 0 || strncmp(input_file, "../", 3) == 0);
     char *parent_dir = NULL;
