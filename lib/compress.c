@@ -138,7 +138,9 @@ char* find_leaf(char leaf, Node *nodes, Node *root_node) {
     if (root_node->type == LEAF) {
         if (root_node->data == leaf) {
             path = malloc(1);
-            path[0] = '\0';
+            if (path != NULL) {
+                path[0] = '\0';
+            }
         }
         return path;
     }
@@ -146,16 +148,20 @@ char* find_leaf(char leaf, Node *nodes, Node *root_node) {
         char *res = find_leaf(leaf, nodes, &nodes[root_node->left]);
         if (res != NULL) {
             path = malloc((strlen(res) + 2) * sizeof(char));
-            strcpy(path, "0");
-            strcat(path, res);
+            if (path != NULL) {
+                strcpy(path, "0");
+                strcat(path, res);
+            }
             free(res);
             return path;
         }
         res = find_leaf(leaf, nodes, &nodes[root_node->right]);
         if (res != NULL) {
             path = malloc((strlen(res) + 2) * sizeof(char));
-            strcpy(path, "1");
-            strcat(path, res);
+            if (path != NULL) {
+                strcpy(path, "1");
+                strcat(path, res);
+            }
             free(res);
             return path;
         }

@@ -1,5 +1,6 @@
 /.nvim_build_cache
 /bin
+build-*/
 *.odt
 *.pdf
 cmake_install.cmake
