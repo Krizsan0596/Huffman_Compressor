@@ -241,7 +241,7 @@ int write_compressed(Compressed_file *compressed, bool overwrite) {
     current += compressed->tree_size;
     memcpy(current, &compressed->data_size, sizeof(long));
     current += sizeof(long);
-    memcpy(current, compressed->compressed_data, ceil((float)compressed->data_size/8));
+    memcpy(current, compressed->compressed_data, (compressed->data_size + 7) / 8);
     int res = write_raw(compressed->file_name, data, file_size, overwrite);
     free(data);
     return res;

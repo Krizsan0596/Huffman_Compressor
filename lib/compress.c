@@ -353,7 +353,7 @@ int run_compression(Arguments args) {
             break;
         }
 
-        compressed_file = malloc(sizeof(Compressed_file));
+        compressed_file = calloc(1, sizeof(Compressed_file));
         if (compressed_file == NULL) {
             printf("Nem sikerult lefoglalni a memoriat.\n");
             res = MALLOC_ERROR;

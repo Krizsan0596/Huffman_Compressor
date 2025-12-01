@@ -200,17 +200,29 @@ static void test_run_compression_directory(void) {
     unlink(output_file);
     
     // Create directories with error checking
-    assert(mkdir(test_dir, 0755) == 0);
-    assert(mkdir(subdir_path, 0755) == 0);
+    if (mkdir(test_dir, 0755) != 0) {
+        fprintf(stderr, "Failed to create test directory: %s\n", test_dir);
+        return;
+    }
+    if (mkdir(subdir_path, 0755) != 0) {
+        fprintf(stderr, "Failed to create test subdirectory: %s\n", subdir_path);
+        return;
+    }
     
     // Create files
     FILE *f1 = fopen(file1_path, "w");
-    assert(f1 != NULL);
+    if (f1 == NULL) {
+        fprintf(stderr, "Failed to create test file: %s\n", file1_path);
+        return;
+    }
     fprintf(f1, "Content of file 1");
     fclose(f1);
     
     FILE *f2 = fopen(file2_path, "w");
-    assert(f2 != NULL);
+    if (f2 == NULL) {
+        fprintf(stderr, "Failed to create test file: %s\n", file2_path);
+        return;
+    }
     fprintf(f2, "Content of file 2");
     fclose(f2);
     
