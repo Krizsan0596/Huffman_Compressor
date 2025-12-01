@@ -338,7 +338,10 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
             res = *directory_size;
             /* Visszalepunk az eredeti mappaba hibaeseten is. */
             if (sep != NULL && !relative_path) {
-                chdir(current_path);
+                if (chdir(current_path) != 0) {
+                    printf("Nem sikerult kilepni a mappabol.\n");
+                    res = DIRECTORY_ERROR;
+                }
             }
             break;
         }
@@ -352,9 +355,15 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
             } else {
                 printf("Nem sikerult a mappa szerializalasa.\n");
             }
-            /* Visszalepunk az eredeti mappaba hibaeseten is. */
             if (sep != NULL && !relative_path) {
-                chdir(current_path);
+                if (chdir(current_path) != 0) {
+                    printf("Nem sikerult kilepni a mappabol.\n");
+                    res = DIRECTORY_ERROR;
+                    if (*data != NULL) {
+                        free(*data);
+                        *data = NULL;
+                    }
+                }
             }
             break;
         }
