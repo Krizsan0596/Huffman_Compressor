@@ -58,6 +58,7 @@ int read_raw(char file_name[], char** data){
     size_t read_size = fread(*data, sizeof(char), file_size, f);
     if (read_size != file_size) {
         free(*data);
+        *data = NULL;
         fclose(f);
         return FILE_READ_ERROR;
     }

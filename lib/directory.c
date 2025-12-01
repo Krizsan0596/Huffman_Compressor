@@ -60,7 +60,6 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
             if (dir == NULL) break;
             else if (strcmp(dir->d_name, ".") == 0 || strcmp(dir->d_name, "..") == 0) continue;
             
-            /* Osszerakjuk a talalt elem teljes eleresi utjat, hogy stat-tel tudjuk vizsgalni. */
             newpath = malloc(strlen(path) + strlen(dir->d_name) + 2);
             if (newpath == NULL) {
                 result = MALLOC_ERROR;
@@ -211,7 +210,8 @@ int extract_directory(char *path, Directory_item *archive, int archive_size, boo
         char *item_path = current->is_dir ? current->dir_path : current->file_path;
         char *full_path = malloc(strlen(path) + strlen(item_path) + 2);
         if (full_path == NULL) return MALLOC_ERROR;
-        /* Ha a felhasznalo adott kimeneti mappat, akkor ott ujrakezdjuk a mappa felepiteset. */
+
+        /* Ha a felhasznalo adott kimeneti mappat, akkor ott kezdjuk a mappa felepiteset. */
         strcpy(full_path, path);
         strcat(full_path, "/");
         strcat(full_path, item_path);
@@ -298,13 +298,12 @@ int deserialize_archive(Directory_item **archive, char *buffer) {
 int prepare_directory(char *input_file, char **data, int *directory_size) {
     char current_path[PATH_MAX];
     char *sep = strrchr(input_file, '/');
-    bool relative_path = (strncmp(input_file, "./", 2) == 0 || strncmp(input_file, "../", 3) == 0);
     char *parent_dir = NULL;
     char *file_name = NULL;
     Directory_item *archive = NULL;
     int archive_size = 0;
     int current_index = 0;
-    int data_len = 0;  /* Stores the serialized data length on success, or negative error code on failure */
+    int data_len = 0;  
     
     while (true) {
         if (getcwd(current_path, sizeof(current_path)) == NULL) {
@@ -313,7 +312,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
             break;
         }
         /* Kulso eleresi ut eseteten athelyezkedunk a szulo mappaba, hogy a tarolt utak relativak maradjanak. */
-        if (sep != NULL && !relative_path) {
+        if (sep != NULL) {
             if (sep == input_file) {
                 parent_dir = strdup("/");
                 if (parent_dir == NULL) {
@@ -356,7 +355,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
             }
             data_len = *directory_size;
             /* Visszalepunk az eredeti mappaba hibaeseten is. */
-            if (sep != NULL && !relative_path) {
+            if (sep != NULL) {
                 if (chdir(current_path) != 0) {
                     printf("Nem sikerult kilepni a mappabol.\n");
                     data_len = DIRECTORY_ERROR;
@@ -374,7 +373,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
             } else {
                 printf("Nem sikerult a mappa szerializalasa.\n");
             }
-            if (sep != NULL && !relative_path) {
+            if (sep != NULL) {
                 if (chdir(current_path) != 0) {
                     printf("Nem sikerult kilepni a mappabol.\n");
                     data_len = DIRECTORY_ERROR;
@@ -388,7 +387,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
         }
         
         /* Visszalepunk az eredeti mappaba. */
-        if (sep != NULL && !relative_path) {
+        if (sep != NULL) {
             if (chdir(current_path) != 0) {
                 printf("Nem sikerult kilepni a mappabol.\n");
                 data_len = DIRECTORY_ERROR;
