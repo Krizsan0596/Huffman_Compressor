@@ -90,8 +90,8 @@ int parse_arguments(int argc, char* argv[], Arguments *args) {
     }
 
     /*
-     * Ellenorizzuk, hogy megadtak-e a bemeneti fajlt, majd leellenorizzuk, hogy olvashato-e.
-     * Ha nem, kilepunk a programbol.
+     * Ellenorizzuk, hogy megadtak-e a bemeneti fajlt, majd leellenorizzuk, hogy letezik-e.
+     * Ha nem, kilepunk a programbol. A stat()-ot hasznaljuk, mert az fopen() nem mukodik mappakon.
      */
     if (args->input_file == NULL) {
         printf("Nem lett bemeneti fajl megadva.\n");
@@ -99,13 +99,12 @@ int parse_arguments(int argc, char* argv[], Arguments *args) {
         return EINVAL;
     }
     
-    FILE *f = fopen(args->input_file, "r");
-    if (f == NULL) {
-        printf("A (%s) fajl nem nyithato meg.\n", args->input_file);
+    struct stat st;
+    if (stat(args->input_file, &st) != 0) {
+        printf("A (%s) fajl nem talalhato.\n", args->input_file);
         print_usage(argv[0]);
         return ENOENT;
     }
-    fclose(f);
 
     if (args->compress_mode && args->extract_mode) {
         printf("A -c es -x kapcsolok kizarjak egymast.\n");
