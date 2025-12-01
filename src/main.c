@@ -103,7 +103,7 @@ int parse_arguments(int argc, char* argv[], Arguments *args) {
     if (stat(args->input_file, &st) != 0) {
         printf("A (%s) fajl nem talalhato.\n", args->input_file);
         print_usage(argv[0]);
-        return ENOENT;
+        return FILE_READ_ERROR;
     }
 
     if (args->compress_mode && args->extract_mode) {
@@ -123,6 +123,9 @@ int main(int argc, char* argv[]){
     int parse_result = parse_arguments(argc, argv, &args);
     if (parse_result == HELP_REQUESTED) {
         return SUCCESS;
+    }
+    if (parse_result == FILE_READ_ERROR) {
+        return ENOENT;
     }
     if (parse_result != SUCCESS) {
         return parse_result;
