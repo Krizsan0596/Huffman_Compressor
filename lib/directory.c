@@ -112,9 +112,15 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
                 }
                 file.file_size = read_raw(newpath, &file.file_data);
                 if (file.file_size < 0) {
-                    result = FILE_READ_ERROR;
-                    current_item = file;
-                    break;
+                    if (file.file_size == EMPTY_FILE) {
+                        /* Empty files are valid - include them with size 0 */
+                        file.file_size = 0;
+                        file.file_data = NULL;
+                    } else {
+                        result = FILE_READ_ERROR;
+                        current_item = file;
+                        break;
+                    }
                 }
                 dir_size += file.file_size;
                 Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
@@ -216,10 +222,20 @@ int extract_directory(char *path, Directory_item *archive, int archive_size, boo
            }
         }
         else {
-            int ret = write_raw(full_path, current->file_data, current->file_size, force);
-            if (ret < 0) {
-                free(full_path);
-                return FILE_WRITE_ERROR;
+            if (current->file_size == 0) {
+                /* Create an empty file */
+                FILE *f = fopen(full_path, "wb");
+                if (f == NULL) {
+                    free(full_path);
+                    return FILE_WRITE_ERROR;
+                }
+                fclose(f);
+            } else {
+                int ret = write_raw(full_path, current->file_data, current->file_size, force);
+                if (ret < 0) {
+                    free(full_path);
+                    return FILE_WRITE_ERROR;
+                }
             }
         }
         free(full_path);
@@ -259,10 +275,14 @@ int deserialize_archive(Directory_item **archive, char *buffer) {
             if ((*archive)[i].file_path == NULL) return MALLOC_ERROR;
             memcpy((*archive)[i].file_path, current, n);
             current += n;
-            (*archive)[i].file_data = malloc((*archive)[i].file_size);
-            if ((*archive)[i].file_data == NULL) return MALLOC_ERROR;
-            memcpy((*archive)[i].file_data, current, (*archive)[i].file_size);
-            current += (*archive)[i].file_size;
+            if ((*archive)[i].file_size > 0) {
+                (*archive)[i].file_data = malloc((*archive)[i].file_size);
+                if ((*archive)[i].file_data == NULL) return MALLOC_ERROR;
+                memcpy((*archive)[i].file_data, current, (*archive)[i].file_size);
+                current += (*archive)[i].file_size;
+            } else {
+                (*archive)[i].file_data = NULL;
+            }
         }
         i++;
     }
