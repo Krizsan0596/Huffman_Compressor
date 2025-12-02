@@ -8,7 +8,8 @@
 #include <errno.h>
 #include <time.h>
 #include "../lib/file.h"
-#include "../lib/compress.h"
+#include "../lib/util.h"
+#include "../lib/huffman.h"
 #include "../lib/data_types.h"
 #include "../lib/debugmalloc.h"
 
