@@ -22,6 +22,10 @@ long get_file_size(FILE *f){
     return size;
 } 
 
+/*
+ * A bajtok szamat nagyobb egysegkent jeleniti meg, kozben frissiti a bemenetul adott meretet.
+ * A valasztott mertekegyseg roviditeset adja vissza.
+ */
 const char* get_unit(int *bytes) {
     if (*bytes < 1024) return "B";
     *bytes /= 1024;
@@ -41,17 +45,24 @@ int read_raw(char file_name[], char** data){
     f = fopen(file_name, "rb");
     if (f == NULL) return FILE_READ_ERROR; // Not exists.
     long file_size = get_file_size(f);
+    if (file_size == 0) {
+        *data = NULL;
+        fclose(f);
+        return EMPTY_FILE;
+    }
     *data = (char*)malloc(file_size);
     if (*data == NULL) {
         fclose(f);
         return MALLOC_ERROR;
     }
     size_t read_size = fread(*data, sizeof(char), file_size, f);
-    fclose(f);
     if (read_size != file_size) {
         free(*data);
+        *data = NULL;
+        fclose(f);
         return FILE_READ_ERROR;
     }
+    fclose(f);
     return read_size;
 }
 
@@ -231,7 +242,7 @@ int write_compressed(Compressed_file *compressed, bool overwrite) {
     current += compressed->tree_size;
     memcpy(current, &compressed->data_size, sizeof(long));
     current += sizeof(long);
-    memcpy(current, compressed->compressed_data, ceil((float)compressed->data_size/8));
+    memcpy(current, compressed->compressed_data, (compressed->data_size + 7) / 8);
     int res = write_raw(compressed->file_name, data, file_size, overwrite);
     free(data);
     return res;

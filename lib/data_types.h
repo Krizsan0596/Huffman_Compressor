@@ -14,12 +14,12 @@ static const char magic[4] = {'H', 'U', 'F', 'F'};
 typedef enum {
     LEAF,
     BRANCH
-} node_type;
+} Node_type;
 
 
 // A Huffman fa egy pontja: unionban tarolja a karaktert vagy a ket gyermek indexet.
 typedef struct Node {
-    node_type type;
+    Node_type type;
     long frequency;
     union {
         char data;
@@ -50,6 +50,7 @@ typedef struct {
 // A segedfuggvenyek hibakodjait tarolja.
 typedef enum {
     SUCCESS = 0,
+    HELP_REQUESTED = 1,
     MALLOC_ERROR = -1,
     FILE_READ_ERROR = -2,
     FILE_MAGIC_ERROR = -3,
@@ -61,8 +62,10 @@ typedef enum {
     SCANF_FAILED = -9,
     DIRECTORY_OPEN_ERROR = -10,
     EMPTY_DIRECTORY = -11,
-    MKDIR_ERROR = -12
-} ErrorCode;
+    MKDIR_ERROR = -12,
+    DIRECTORY_ERROR = -13,
+    EMPTY_FILE = -14
+} Error_code;
 
 typedef struct {
     bool is_dir;
@@ -75,5 +78,14 @@ typedef struct {
         };
     };
 } Directory_item;
+
+typedef struct {
+    bool compress_mode;
+    bool extract_mode;
+    bool force;
+    bool directory;
+    char *input_file;
+    char *output_file;
+} Arguments;
 
 #endif
