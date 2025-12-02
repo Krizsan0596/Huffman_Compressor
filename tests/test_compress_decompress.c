@@ -3,8 +3,8 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include "../lib/compress.h"
-#include "../lib/decompress.h"
+#include "../lib/util.h"
+#include "../lib/huffman.h"
 #include "../lib/file.h"
 #include "../lib/data_types.h"
 #include "../lib/debugmalloc.h"

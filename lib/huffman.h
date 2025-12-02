@@ -1,5 +1,5 @@
-#ifndef COMPRESS_H
-#define COMPRESS_H
+#ifndef HUFFMAN_H
+#define HUFFMAN_H
 
 #include "data_types.h"
 #include <stdbool.h>
@@ -12,7 +12,6 @@ void sort_nodes(Node *nodes, int len);
 char* check_cache(char leaf, char **cache);
 char* find_leaf(char leaf, Node *nodes, Node *root_node);
 int compress(char *original_data, long data_len, Node *nodes, Node *root_node, char** cache, Compressed_file *compressed_file);
-char* generate_output_file(char *input_file);
-int run_compression(Arguments args);
+int decompress(Compressed_file *compressed, char *raw);
 
 #endif
