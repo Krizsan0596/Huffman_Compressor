@@ -24,6 +24,9 @@ int decompress(Compressed_file *compressed, char *raw) {
     long current_node = root_index;
     long current_raw = 0;
 
+    // Ellenorzi, hogy a gyoker level-e (egyetlen egyedi karakter esete).
+    bool root_is_leaf = (compressed->huffman_tree[root_index].type == LEAF);
+
     unsigned char buffer = 0;
     for (long i = 0; i < compressed->data_size; i++) {
         if (current_raw >= compressed->original_size) {
@@ -34,15 +37,20 @@ int decompress(Compressed_file *compressed, char *raw) {
             buffer = compressed->compressed_data[i / 8];
         }
 
-        if (buffer & (1 << (7 - i % 8))) {
-            current_node = compressed->huffman_tree[current_node].right;
+        // Ha a gyoker level, minden bit ugyanazt a karaktert adja vissza.
+        if (root_is_leaf) {
+            raw[current_raw++] = compressed->huffman_tree[root_index].data;
         } else {
-            current_node = compressed->huffman_tree[current_node].left;
-        }
+            if (buffer & (1 << (7 - i % 8))) {
+                current_node = compressed->huffman_tree[current_node].right;
+            } else {
+                current_node = compressed->huffman_tree[current_node].left;
+            }
 
-        if (compressed->huffman_tree[current_node].type == LEAF) {
-            raw[current_raw++] = compressed->huffman_tree[current_node].data;
-            current_node = root_index;
+            if (compressed->huffman_tree[current_node].type == LEAF) {
+                raw[current_raw++] = compressed->huffman_tree[current_node].data;
+                current_node = root_index;
+            }
         }
     }
 

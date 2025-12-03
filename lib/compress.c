@@ -230,6 +230,28 @@ int compress(char *original_data, long data_len, Node *nodes, Node *root_node, c
         total_bits += bit_count;
     }
 
+    /* Specialis eset: ha csak egyedi karakter van, a fa melysege 0,
+     * ezert nem keletkezne egyetlen bit sem. Minden karakterhez irunk
+     * egy 0 bitet, hogy a hosszt taroljuk. */
+    if (total_bits == 0 && data_len > 0) {
+        buffer = 0;
+        bit_count = 0;
+        for (long i = 0; i < data_len; i++) {
+            // 0 bitet irunk (nem allitunk be bitet a bufferben)
+            bit_count++;
+            if (bit_count == 8) {
+                compressed_file->compressed_data[total_bits / 8] = buffer;
+                total_bits += 8;
+                buffer = 0;
+                bit_count = 0;
+            }
+        }
+        if (bit_count > 0) {
+            compressed_file->compressed_data[total_bits / 8] = buffer;
+            total_bits += bit_count;
+        }
+    }
+
     compressed_file->data_size = total_bits;
 
     long final_size = (long)ceil((double)total_bits / 8.0);

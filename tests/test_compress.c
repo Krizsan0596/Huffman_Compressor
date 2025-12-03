@@ -330,6 +330,300 @@ static void test_run_compression_empty_file(void) {
     unlink(output_file);
 }
 
+/* ===== EDGE CASE TESTS ===== */
+
+static void test_compress_single_char(void) {
+    // Test with single character
+    const char *input = "A";
+    const long len = 1;
+    
+    Node *nodes = NULL;
+    Node *root = NULL;
+    build_huffman_tree(input, len, &nodes, &root);
+    
+    char **cache = calloc(256, sizeof(char *));
+    assert(cache != NULL);
+    
+    Compressed_file compressed = {0};
+    int rc = compress((char *)input, len, nodes, root, cache, &compressed);
+    assert(rc == 0);
+    (void)rc;
+    
+    // Single character compression succeeds with one 0 bit per character
+    assert(compressed.data_size == 1);
+    assert(compressed.compressed_data != NULL);
+    
+    free(compressed.compressed_data);
+    free_cache(cache);
+    free(nodes);
+}
+
+static void test_compress_all_same_char(void) {
+    // All same character
+    const char *input = "AAAAAAAAAA";
+    const long len = 10;
+    
+    Node *nodes = NULL;
+    Node *root = NULL;
+    build_huffman_tree(input, len, &nodes, &root);
+    
+    char **cache = calloc(256, sizeof(char *));
+    assert(cache != NULL);
+    
+    Compressed_file compressed = {0};
+    int rc = compress((char *)input, len, nodes, root, cache, &compressed);
+    assert(rc == 0);
+    assert(compressed.data_size == 10);
+    assert(compressed.compressed_data != NULL);
+    (void)rc;
+    
+    free(compressed.compressed_data);
+    free_cache(cache);
+    free(nodes);
+}
+
+static void test_compress_all_unique_chars(void) {
+    const char *input = "ABCDEFGH";
+    const long len = 8;
+    
+    Node *nodes = NULL;
+    Node *root = NULL;
+    build_huffman_tree(input, len, &nodes, &root);
+    
+    char **cache = calloc(256, sizeof(char *));
+    assert(cache != NULL);
+    
+    Compressed_file compressed = {0};
+    int rc = compress((char *)input, len, nodes, root, cache, &compressed);
+    assert(rc == 0);
+    assert(compressed.compressed_data != NULL);
+    (void)rc;
+    
+    free(compressed.compressed_data);
+    free_cache(cache);
+    free(nodes);
+}
+
+static void test_compress_binary_data(void) {
+    char input[256];
+    for (int i = 0; i < 256; i++) {
+        input[i] = (char)i;
+    }
+    const long len = 256;
+    
+    Node *nodes = NULL;
+    Node *root = NULL;
+    build_huffman_tree(input, len, &nodes, &root);
+    
+    char **cache = calloc(256, sizeof(char *));
+    assert(cache != NULL);
+    
+    Compressed_file compressed = {0};
+    int rc = compress(input, len, nodes, root, cache, &compressed);
+    assert(rc == 0);
+    assert(compressed.compressed_data != NULL);
+    (void)rc;
+    
+    free(compressed.compressed_data);
+    free_cache(cache);
+    free(nodes);
+}
+
+static void test_run_compression_moderately_large_file(void) {
+    const char *test_file = "/tmp/test_large_file.txt";
+    const char *output_file = "/tmp/test_large_output.huff";
+    
+    // Increase debugmalloc limits for this test
+    debugmalloc_max_block_size(10 * 1024 * 1024);  // 10MB
+    
+    FILE *f = fopen(test_file, "w");
+    assert(f != NULL);
+    // 100000 lines, about 5MB
+    for (int i = 0; i < 100000; i++) {
+        fprintf(f, "Line %d: The quick brown fox jumps over the lazy dog.\n", i);
+    }
+    fclose(f);
+    
+    unlink(output_file);
+    
+    Arguments args = {0};
+    args.compress_mode = true;
+    args.extract_mode = false;
+    args.force = false;
+    args.directory = false;
+    args.input_file = (char *)test_file;
+    args.output_file = (char *)output_file;
+    
+    int result = run_compression(args);
+    assert(result == 0);
+    
+    struct stat st;
+    assert(stat(output_file, &st) == 0);
+    assert(st.st_size > 0);
+    
+    unlink(test_file);
+    unlink(output_file);
+}
+
+static void test_run_compression_special_chars_in_filename(void) {
+    const char *test_file = "/tmp/test-file_with.special$chars.txt";
+    const char *output_file = "/tmp/test-output_with.special$chars.huff";
+    const char *test_content = "Test content with special filename";
+    
+    FILE *f = fopen(test_file, "w");
+    assert(f != NULL);
+    fprintf(f, "%s", test_content);
+    fclose(f);
+    
+    unlink(output_file);
+    
+    Arguments args = {0};
+    args.compress_mode = true;
+    args.extract_mode = false;
+    args.force = false;
+    args.directory = false;
+    args.input_file = (char *)test_file;
+    args.output_file = (char *)output_file;
+    
+    int result = run_compression(args);
+    assert(result == 0);
+    
+    struct stat st;
+    assert(stat(output_file, &st) == 0);
+    
+    unlink(test_file);
+    unlink(output_file);
+}
+
+static void test_run_compression_readonly_input(void) {
+    const char *test_file = "/tmp/test_readonly_input.txt";
+    const char *output_file = "/tmp/test_readonly_output.huff";
+    const char *test_content = "Read-only test content";
+    
+    FILE *f = fopen(test_file, "w");
+    assert(f != NULL);
+    fprintf(f, "%s", test_content);
+    fclose(f);
+    
+    chmod(test_file, 0444);
+    unlink(output_file);
+    
+    Arguments args = {0};
+    args.compress_mode = true;
+    args.extract_mode = false;
+    args.force = false;
+    args.directory = false;
+    args.input_file = (char *)test_file;
+    args.output_file = (char *)output_file;
+    
+    int result = run_compression(args);
+    assert(result == 0);
+    
+    struct stat st;
+    assert(stat(output_file, &st) == 0);
+    
+    chmod(test_file, 0644);
+    unlink(test_file);
+    unlink(output_file);
+}
+
+static void test_run_compression_empty_directory(void) {
+    const char *test_dir = "/tmp/test_empty_dir";
+    const char *output_file = "/tmp/test_empty_dir.huff";
+    char cmd[256];
+    
+    snprintf(cmd, sizeof(cmd), "rm -rf %s", test_dir);
+    system(cmd);
+    unlink(output_file);
+    
+    mkdir(test_dir, 0755);
+    
+    Arguments args = {0};
+    args.compress_mode = true;
+    args.extract_mode = false;
+    args.force = false;
+    args.directory = true;
+    args.input_file = (char *)test_dir;
+    args.output_file = (char *)output_file;
+    
+    int result = run_compression(args);
+    assert(result == 0);
+    
+    struct stat st;
+    assert(stat(output_file, &st) == 0);
+    
+    snprintf(cmd, sizeof(cmd), "rm -rf %s", test_dir);
+    system(cmd);
+    unlink(output_file);
+}
+
+static void test_run_compression_nested_empty_directories(void) {
+    const char *test_dir = "/tmp/test_nested_empty_dir";
+    const char *output_file = "/tmp/test_nested_empty_dir.huff";
+    char cmd[256];
+    char subdir1[256], subdir2[256], subdir3[256];
+    
+    snprintf(cmd, sizeof(cmd), "rm -rf %s", test_dir);
+    system(cmd);
+    unlink(output_file);
+    
+    mkdir(test_dir, 0755);
+    snprintf(subdir1, sizeof(subdir1), "%s/level1", test_dir);
+    snprintf(subdir2, sizeof(subdir2), "%s/level1/level2", test_dir);
+    snprintf(subdir3, sizeof(subdir3), "%s/level1/level2/level3", test_dir);
+    
+    mkdir(subdir1, 0755);
+    mkdir(subdir2, 0755);
+    mkdir(subdir3, 0755);
+    
+    Arguments args = {0};
+    args.compress_mode = true;
+    args.extract_mode = false;
+    args.force = false;
+    args.directory = true;
+    args.input_file = (char *)test_dir;
+    args.output_file = (char *)output_file;
+    
+    int result = run_compression(args);
+    assert(result == 0);
+    
+    struct stat st;
+    assert(stat(output_file, &st) == 0);
+    
+    snprintf(cmd, sizeof(cmd), "rm -rf %s", test_dir);
+    system(cmd);
+    unlink(output_file);
+}
+
+static void test_run_compression_single_byte_file(void) {
+    const char *test_file = "/tmp/test_single_byte.txt";
+    const char *output_file = "/tmp/test_single_byte_output.huff";
+    
+    FILE *f = fopen(test_file, "w");
+    assert(f != NULL);
+    fputc('X', f);
+    fclose(f);
+    
+    unlink(output_file);
+    
+    Arguments args = {0};
+    args.compress_mode = true;
+    args.extract_mode = false;
+    args.force = false;
+    args.directory = false;
+    args.input_file = (char *)test_file;
+    args.output_file = (char *)output_file;
+    
+    int result = run_compression(args);
+    assert(result == 0);
+    
+    struct stat st;
+    assert(stat(output_file, &st) == 0);
+    
+    unlink(test_file);
+    unlink(output_file);
+}
+
 int main(void) {
     test_compress_basic_pattern();
     test_compress_zero_length();
@@ -341,6 +635,18 @@ int main(void) {
     test_run_compression_directory();
     test_run_compression_force_overwrite();
     test_run_compression_empty_file();
+    
+    // Edge case tests
+    test_compress_single_char();
+    test_compress_all_same_char();
+    test_compress_all_unique_chars();
+    test_compress_binary_data();
+    test_run_compression_moderately_large_file();
+    test_run_compression_special_chars_in_filename();
+    test_run_compression_readonly_input();
+    test_run_compression_empty_directory();
+    test_run_compression_nested_empty_directories();
+    test_run_compression_single_byte_file();
     
     return 0;
 }

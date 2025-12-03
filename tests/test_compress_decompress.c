@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <assert.h>
 #include "../lib/compress.h"
 #include "../lib/decompress.h"
 #include "../lib/file.h"
@@ -283,6 +284,303 @@ int main() {
     }
     
     printf("All run_decompression tests passed!\n");
+
+    // ==========================================
+    // EDGE CASE TESTS
+    // ==========================================
+    printf("Testing edge cases...\n");
+    
+    // Edge case 1: Compress/decompress single character
+    printf("  Edge case 1: Single character...\n");
+    {
+        char *single_char = "X";
+        long single_len = 1;
+        
+        long *freqs = calloc(256, sizeof(long));
+        count_frequencies(single_char, single_len, freqs);
+        
+        int leaf_cnt = 0;
+        for (int i = 0; i < 256; i++) {
+            if (freqs[i] != 0) leaf_cnt++;
+        }
+        
+        Node *single_nodes = malloc((2 * leaf_cnt - 1) * sizeof(Node));
+        int j = 0;
+        for (int i = 0; i < 256; i++) {
+            if (freqs[i] != 0) {
+                single_nodes[j++] = construct_leaf(freqs[i], (char)i);
+            }
+        }
+        free(freqs);
+        
+        sort_nodes(single_nodes, leaf_cnt);
+        Node *single_root = construct_tree(single_nodes, leaf_cnt);
+        
+        char **single_cache = calloc(256, sizeof(char*));
+        Compressed_file *single_compressed = malloc(sizeof(Compressed_file));
+        
+        int comp_res = compress(single_char, single_len, single_nodes, single_root, single_cache, single_compressed);
+        assert(comp_res == 0);
+        
+        single_compressed->huffman_tree = single_nodes;
+        single_compressed->tree_size = ((single_root - single_nodes) + 1) * sizeof(Node);
+        
+        char *single_raw = malloc(single_len);
+        int decomp_res = decompress(single_compressed, single_raw);
+        assert(decomp_res == 0);
+        assert(memcmp(single_char, single_raw, single_len) == 0);
+        
+        free(single_nodes);
+        for (int i = 0; i < 256; i++) {
+            if (single_cache[i] != NULL) free(single_cache[i]);
+        }
+        free(single_cache);
+        free(single_compressed->compressed_data);
+        free(single_compressed);
+        free(single_raw);
+        printf("    Single character test passed.\n");
+    }
+    
+    // Edge case 2: Compress/decompress repeating pattern
+    printf("  Edge case 2: Repeating pattern...\n");
+    {
+        char *pattern = "ABABABABABABABABABABABAB";
+        long pattern_len = strlen(pattern);
+        
+        long *freqs = calloc(256, sizeof(long));
+        count_frequencies(pattern, pattern_len, freqs);
+        
+        int leaf_cnt = 0;
+        for (int i = 0; i < 256; i++) {
+            if (freqs[i] != 0) leaf_cnt++;
+        }
+        
+        Node *pattern_nodes = malloc((2 * leaf_cnt - 1) * sizeof(Node));
+        int j = 0;
+        for (int i = 0; i < 256; i++) {
+            if (freqs[i] != 0) {
+                pattern_nodes[j++] = construct_leaf(freqs[i], (char)i);
+            }
+        }
+        free(freqs);
+        
+        sort_nodes(pattern_nodes, leaf_cnt);
+        Node *pattern_root = construct_tree(pattern_nodes, leaf_cnt);
+        
+        char **pattern_cache = calloc(256, sizeof(char*));
+        Compressed_file *pattern_compressed = malloc(sizeof(Compressed_file));
+        
+        int comp_res = compress(pattern, pattern_len, pattern_nodes, pattern_root, pattern_cache, pattern_compressed);
+        assert(comp_res == 0);
+        
+        pattern_compressed->huffman_tree = pattern_nodes;
+        pattern_compressed->tree_size = ((pattern_root - pattern_nodes) + 1) * sizeof(Node);
+        
+        char *pattern_raw = malloc(pattern_len);
+        int decomp_res = decompress(pattern_compressed, pattern_raw);
+        assert(decomp_res == 0);
+        assert(memcmp(pattern, pattern_raw, pattern_len) == 0);
+        
+        free(pattern_nodes);
+        for (int i = 0; i < 256; i++) {
+            if (pattern_cache[i] != NULL) free(pattern_cache[i]);
+        }
+        free(pattern_cache);
+        free(pattern_compressed->compressed_data);
+        free(pattern_compressed);
+        free(pattern_raw);
+        printf("    Repeating pattern test passed.\n");
+    }
+    
+    // Edge case 3: Compress/decompress all printable ASCII
+    printf("  Edge case 3: All printable ASCII...\n");
+    {
+        char ascii_str[95];
+        for (int i = 0; i < 95; i++) {
+            ascii_str[i] = (char)(32 + i);
+        }
+        long ascii_len = 95;
+        
+        long *freqs = calloc(256, sizeof(long));
+        count_frequencies(ascii_str, ascii_len, freqs);
+        
+        int leaf_cnt = 0;
+        for (int i = 0; i < 256; i++) {
+            if (freqs[i] != 0) leaf_cnt++;
+        }
+        
+        Node *ascii_nodes = malloc((2 * leaf_cnt - 1) * sizeof(Node));
+        int j = 0;
+        for (int i = 0; i < 256; i++) {
+            if (freqs[i] != 0) {
+                ascii_nodes[j++] = construct_leaf(freqs[i], (char)i);
+            }
+        }
+        free(freqs);
+        
+        sort_nodes(ascii_nodes, leaf_cnt);
+        Node *ascii_root = construct_tree(ascii_nodes, leaf_cnt);
+        
+        char **ascii_cache = calloc(256, sizeof(char*));
+        Compressed_file *ascii_compressed = malloc(sizeof(Compressed_file));
+        
+        int comp_res = compress(ascii_str, ascii_len, ascii_nodes, ascii_root, ascii_cache, ascii_compressed);
+        assert(comp_res == 0);
+        
+        ascii_compressed->huffman_tree = ascii_nodes;
+        ascii_compressed->tree_size = ((ascii_root - ascii_nodes) + 1) * sizeof(Node);
+        
+        char *ascii_raw = malloc(ascii_len);
+        int decomp_res = decompress(ascii_compressed, ascii_raw);
+        assert(decomp_res == 0);
+        assert(memcmp(ascii_str, ascii_raw, ascii_len) == 0);
+        
+        free(ascii_nodes);
+        for (int i = 0; i < 256; i++) {
+            if (ascii_cache[i] != NULL) free(ascii_cache[i]);
+        }
+        free(ascii_cache);
+        free(ascii_compressed->compressed_data);
+        free(ascii_compressed);
+        free(ascii_raw);
+        printf("    All printable ASCII test passed.\n");
+    }
+    
+    // Edge case 4: Compress/decompress with nulls (binary data)
+    printf("  Edge case 4: Binary data with nulls...\n");
+    {
+        char binary_data[20] = {0, 1, 2, 0, 0, 3, 4, 0, 5, 6, 0, 0, 7, 8, 9, 0, 10, 11, 12, 0};
+        long binary_len = 20;
+        
+        long *freqs = calloc(256, sizeof(long));
+        count_frequencies(binary_data, binary_len, freqs);
+        
+        int leaf_cnt = 0;
+        for (int i = 0; i < 256; i++) {
+            if (freqs[i] != 0) leaf_cnt++;
+        }
+        
+        Node *binary_nodes = malloc((2 * leaf_cnt - 1) * sizeof(Node));
+        int j = 0;
+        for (int i = 0; i < 256; i++) {
+            if (freqs[i] != 0) {
+                binary_nodes[j++] = construct_leaf(freqs[i], (char)i);
+            }
+        }
+        free(freqs);
+        
+        sort_nodes(binary_nodes, leaf_cnt);
+        Node *binary_root = construct_tree(binary_nodes, leaf_cnt);
+        
+        char **binary_cache = calloc(256, sizeof(char*));
+        Compressed_file *binary_compressed = malloc(sizeof(Compressed_file));
+        
+        int comp_res = compress(binary_data, binary_len, binary_nodes, binary_root, binary_cache, binary_compressed);
+        assert(comp_res == 0);
+        
+        binary_compressed->huffman_tree = binary_nodes;
+        binary_compressed->tree_size = ((binary_root - binary_nodes) + 1) * sizeof(Node);
+        
+        char *binary_raw = malloc(binary_len);
+        int decomp_res = decompress(binary_compressed, binary_raw);
+        assert(decomp_res == 0);
+        assert(memcmp(binary_data, binary_raw, binary_len) == 0);
+        
+        free(binary_nodes);
+        for (int i = 0; i < 256; i++) {
+            if (binary_cache[i] != NULL) free(binary_cache[i]);
+        }
+        free(binary_cache);
+        free(binary_compressed->compressed_data);
+        free(binary_compressed);
+        free(binary_raw);
+        printf("    Binary data with nulls test passed.\n");
+    }
+    
+    // Edge case 5: run_decompression with corrupted file (invalid magic)
+    printf("  Edge case 5: Corrupted file handling...\n");
+    {
+        const char *corrupted_file = "test_corrupted.huff";
+        FILE *cf = fopen(corrupted_file, "wb");
+        assert(cf != NULL);
+        // Write invalid magic
+        char bad_magic[8] = "BADMGIC";
+        fwrite(bad_magic, 1, 8, cf);
+        fclose(cf);
+        
+        Arguments decomp_args = {0};
+        decomp_args.compress_mode = false;
+        decomp_args.extract_mode = true;
+        decomp_args.force = true;
+        decomp_args.directory = false;
+        decomp_args.input_file = (char *)corrupted_file;
+        decomp_args.output_file = "output_corrupted.txt";
+        
+        int result = run_decompression(decomp_args);
+        assert(result != 0);  // Should fail
+        
+        remove(corrupted_file);
+        printf("    Corrupted file handling test passed. Error code: %d\n", result);
+    }
+    
+    // Edge case 6: Large file compress/decompress round-trip
+    printf("  Edge case 6: Large file round-trip...\n");
+    {
+        char *large_input = "test_large_roundtrip.txt";
+        char *large_compressed = "test_large_roundtrip.huff";
+        char *large_output = "test_large_roundtrip_out.txt";
+        
+        // Create large file with repetitive but varied content
+        FILE *lf = fopen(large_input, "w");
+        assert(lf != NULL);
+        debugmalloc_max_block_size(10 * 1024 * 1024);  // 10MB
+        for (int i = 0; i < 10000; i++) {
+            fprintf(lf, "Line %d: Lorem ipsum dolor sit amet, consectetur adipiscing elit.\n", i);
+        }
+        fclose(lf);
+        
+        // Compress
+        Arguments compress_args = {0};
+        compress_args.compress_mode = true;
+        compress_args.extract_mode = false;
+        compress_args.force = true;
+        compress_args.directory = false;
+        compress_args.input_file = large_input;
+        compress_args.output_file = large_compressed;
+        
+        int comp_result = run_compression(compress_args);
+        assert(comp_result == 0);
+        
+        // Decompress
+        Arguments decomp_args = {0};
+        decomp_args.compress_mode = false;
+        decomp_args.extract_mode = true;
+        decomp_args.force = true;
+        decomp_args.directory = false;
+        decomp_args.input_file = large_compressed;
+        decomp_args.output_file = large_output;
+        
+        int decomp_result = run_decompression(decomp_args);
+        assert(decomp_result == 0);
+        
+        // Verify content matches
+        char *original_content = NULL;
+        char *decompressed_content = NULL;
+        int orig_size = read_raw(large_input, &original_content);
+        int decomp_size = read_raw(large_output, &decompressed_content);
+        
+        assert(orig_size == decomp_size);
+        assert(memcmp(original_content, decompressed_content, orig_size) == 0);
+        
+        free(original_content);
+        free(decompressed_content);
+        remove(large_input);
+        remove(large_compressed);
+        remove(large_output);
+        printf("    Large file round-trip test passed.\n");
+    }
+    
+    printf("All edge case tests passed!\n");
 
     return 0;
 }
