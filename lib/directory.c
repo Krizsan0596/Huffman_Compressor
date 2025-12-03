@@ -26,9 +26,15 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
     while (true) {
         /* Az elso hivaskor felvesszuk a gyoker mappat az archivumba, hogy a relativ utak megmaradjanak. */
         if (*current_index == 0) {
+            struct stat root_st;
+            if (stat(path, &root_st) != 0) {
+                result = DIRECTORY_ERROR;
+                break;
+            }
             Directory_item root = {0};
             root.is_dir = true;
             root.dir_path = strdup(path);
+            root.perms = root_st.st_mode & 0777;
             if (root.dir_path == NULL) {
                 result = MALLOC_ERROR;
                 break;
@@ -80,6 +86,7 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
                 Directory_item subdir = {0};
                 subdir.is_dir = true;
                 subdir.dir_path = strdup(newpath);
+                subdir.perms = st.st_mode & 0777;
                 if (subdir.dir_path == NULL) {
                     result = MALLOC_ERROR;
                     current_item = subdir;
@@ -166,6 +173,7 @@ long serialize_archive(Directory_item *archive, int archive_size, char **buffer)
     for (int i = 0; i < archive_size; i++) {
         data_size += sizeof(bool);
         if (archive[i].is_dir) {
+            data_size += sizeof(int);
             data_size += strlen(archive[i].dir_path) + 1;
         }
         else {
@@ -183,6 +191,8 @@ long serialize_archive(Directory_item *archive, int archive_size, char **buffer)
         memcpy(current, &archive[i].is_dir, sizeof(bool));
         current += sizeof(bool);
         if (archive[i].is_dir) {
+            memcpy(current, &archive[i].perms, sizeof(int));
+            current += sizeof(int);
             memcpy(current, archive[i].dir_path, strlen(archive[i].dir_path) + 1);
             current += strlen(archive[i].dir_path) + 1;
         }
@@ -216,7 +226,7 @@ int extract_directory(char *path, Directory_item *archive, int archive_size, boo
         strcat(full_path, "/");
         strcat(full_path, item_path);
         if (current->is_dir) {
-           int ret = mkdir(full_path, 0755);
+           int ret = mkdir(full_path, current->perms);
            if (ret != 0 && errno != EEXIST) {
                free(full_path);
                return MKDIR_ERROR;
@@ -260,6 +270,8 @@ int deserialize_archive(Directory_item **archive, char *buffer) {
         memcpy(&(*archive)[i].is_dir, current, sizeof(bool));
         current += sizeof(bool);
         if ((*archive)[i].is_dir) {
+            memcpy(&(*archive)[i].perms, current, sizeof(int));
+            current += sizeof(int);
             char *end = strchr(current, '\0');
             int n = end - current + 1;
             (*archive)[i].dir_path = malloc(n);
