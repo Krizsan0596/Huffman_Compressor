@@ -98,8 +98,8 @@ int run_decompression(Arguments args, char **raw_data, long *raw_size, bool *is_
             break;
         }
 
-        raw_data = malloc(compressed_file->original_size * sizeof(char));
-        if (raw_data == NULL) {
+        *raw_data = malloc(compressed_file->original_size * sizeof(char));
+        if (*raw_data == NULL) {
             printf("Nem sikerult lefoglalni a memoriat.\n");
             res = ENOMEM;
             break;
@@ -130,5 +130,11 @@ int run_decompression(Arguments args, char **raw_data, long *raw_size, bool *is_
         free(compressed_file->compressed_data);
         free(compressed_file);
     }
+
+    if (res != 0 && raw_data != NULL && *raw_data != NULL) {
+        free(*raw_data);
+        *raw_data = NULL;
+    }
+
     return res;
 }
