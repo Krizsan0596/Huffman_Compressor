@@ -170,16 +170,18 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
 long serialize_archive(Directory_item *item, FILE *output) {
     if (item == NULL || output == NULL) return FILE_WRITE_ERROR;
 
-    long data_size = sizeof(bool);
+    long payload_size = sizeof(bool);
     if (item->is_dir) {
-        data_size += sizeof(int);
-        data_size += strlen(item->dir_path) + 1;
+        payload_size += sizeof(int);
+        payload_size += strlen(item->dir_path) + 1;
     }
     else {
-        data_size += sizeof(long);
-        data_size += strlen(item->file_path) + 1;
-        data_size += item->file_size;
+        payload_size += sizeof(long);
+        payload_size += strlen(item->file_path) + 1;
+        payload_size += item->file_size;
     }
+
+    if (fwrite(&payload_size, sizeof(long), 1, output) != 1) return FILE_WRITE_ERROR;
 
     if (fwrite(&item->is_dir, sizeof(bool), 1, output) != 1) return FILE_WRITE_ERROR;
     if (item->is_dir) {
@@ -194,7 +196,7 @@ long serialize_archive(Directory_item *item, FILE *output) {
         if (item->file_size > 0 && fwrite(item->file_data, 1, item->file_size, output) != (size_t)item->file_size) return FILE_WRITE_ERROR;
     }
 
-    return data_size;
+    return payload_size + (long)sizeof(long);
 }
 
 
@@ -262,6 +264,11 @@ int deserialize_archive(Directory_item **archive, char *buffer) {
     if (*archive == NULL) return MALLOC_ERROR;
     int i = 0;
     while (i < archive_size) {
+        long entry_size;
+        memcpy(&entry_size, current, sizeof(long));
+        current += sizeof(long);
+        (void)entry_size;
+
         memcpy(&(*archive)[i].is_dir, current, sizeof(bool));
         current += sizeof(bool);
         if ((*archive)[i].is_dir) {
