@@ -213,7 +213,7 @@ long serialize_archive(Directory_item *archive, int archive_size, char **buffer)
  * Kicsomagolja az archivalt mappat a megadott utvonalra, letrehozza a mappakat es fajlokat.
  * Siker eseten 0-t ad vissza, hiba eseten negativ kodot.
  */
-int extract_directory(char *path, Directory_item *archive, int archive_size, bool force) {
+int extract_directory(char *path, Directory_item *archive, int archive_size, bool force, bool no_preserve_perms) {
     if (path == NULL) path = ".";
     for (int current_index = 0; current_index < archive_size; current_index++) {
         Directory_item *current = &archive[current_index];
@@ -230,6 +230,12 @@ int extract_directory(char *path, Directory_item *archive, int archive_size, boo
            if (ret != 0 && errno != EEXIST) {
                free(full_path);
                return MKDIR_ERROR;
+           }
+           if (no_preserve_perms && errno == EEXIST) {
+               if (chmod(full_path, current->perms) != 0) {
+                   free(full_path);
+                   return MKDIR_ERROR;
+               }
            }
         }
         else {
@@ -435,7 +441,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
  * Deszerializalja es kitomoriti az archivalt mappakat.
  * Sikeres muveletek eseten 0-t, hiba eseten negativ erteket ad vissza.
  */
-int restore_directory(char *raw_data, char *output_file, bool force) {
+int restore_directory(char *raw_data, char *output_file, bool force, bool no_preserve_perms) {
     Directory_item *archive = NULL;
     int archive_size = 0;
     int res = 0;
@@ -460,7 +466,7 @@ int restore_directory(char *raw_data, char *output_file, bool force) {
             }
         }
         
-        int ret = extract_directory(output_file != NULL ? output_file : ".", archive, archive_size, force);
+        int ret = extract_directory(output_file != NULL ? output_file : ".", archive, archive_size, force, no_preserve_perms);
         if (ret != 0) {
             if (ret == MKDIR_ERROR) {
                 printf("Nem sikerult letrehozni egy mappat a kitomoriteskor.\n");

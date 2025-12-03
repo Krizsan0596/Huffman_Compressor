@@ -357,7 +357,6 @@ int run_compression(Arguments args) {
             res = MALLOC_ERROR;
             break;
         }
-        
         // Tomoriti a beolvasott adatokat a compressed_file strukturaba.
         int compress_res = compress(data, data_len, nodes, root_node, cache, compressed_file);
         if (compress_res != 0) {

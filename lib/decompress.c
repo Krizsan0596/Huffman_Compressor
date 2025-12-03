@@ -102,7 +102,7 @@ int run_decompression(Arguments args) {
         }
 
         if (args.directory) {
-            int ret = restore_directory(raw_data, args.output_file, args.force);
+            int ret = restore_directory(raw_data, args.output_file, args.force, args.no_preserve_perms);
             if (ret != 0) {
                 res = ret;
                 break;
