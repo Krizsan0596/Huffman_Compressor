@@ -10,6 +10,51 @@
 #include "../lib/data_types.h"
 #include "../lib/debugmalloc.h"
 
+// Helper function to recursively delete a directory
+static int remove_directory_recursive(const char *path) {
+    DIR *dir = opendir(path);
+    if (dir == NULL) {
+        return unlink(path);
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        char full_path[1024];
+        snprintf(full_path, sizeof(full_path), "%s/%s", path, entry->d_name);
+
+        struct stat st;
+        if (stat(full_path, &st) == 0) {
+            if (S_ISDIR(st.st_mode)) {
+                remove_directory_recursive(full_path);
+            } else {
+                unlink(full_path);
+            }
+        }
+    }
+    closedir(dir);
+    return rmdir(path);
+}
+
+// Helper function to free Directory_item arrays
+static void free_directory_items(Directory_item *items, int count) {
+    if (items == NULL) {
+        return;
+    }
+    for (int i = 0; i < count; i++) {
+        if (items[i].is_dir) {
+            free(items[i].dir_path);
+        } else {
+            free(items[i].file_path);
+            free(items[i].file_data);
+        }
+    }
+    free(items);
+}
+
 // Function to recursively compare two directories
 int compare_directories(const char *path1, const char *path2) {
     DIR *dir1 = opendir(path1);
@@ -138,9 +183,7 @@ int main() {
     }
 
     // Create output directory
-    char command[1024];
-    snprintf(command, sizeof(command), "rm -rf %s", output_dir);
-    system(command);
+    remove_directory_recursive(output_dir);
     mkdir(output_dir, 0755);
 
     // 1. Archive the directory
@@ -248,10 +291,8 @@ int main() {
     }
     free(deserialized_archive);
 
-    snprintf(command, sizeof(command), "rm -rf %s", output_dir);
-    system(command);
-    snprintf(command, sizeof(command), "rm -rf %s", test_dir);
-    system(command);
+    remove_directory_recursive(output_dir);
+    remove_directory_recursive(test_dir);
 
     // ==========================================
     // Test prepare_directory function
@@ -393,8 +434,7 @@ int main() {
         
         // With absolute path, paths should be stored relative to the parent directory
         // So we can extract and verify the round-trip works
-        snprintf(command, sizeof(command), "rm -rf %s", prep_output_dir);
-        system(command);
+        remove_directory_recursive(prep_output_dir);
         mkdir(prep_output_dir, 0755);
         
         if (chdir(prep_output_dir) != 0) {
@@ -470,8 +510,7 @@ int main() {
             }
         }
         free(prep_archive);
-        snprintf(command, sizeof(command), "rm -rf %s", prep_output_dir);
-        system(command);
+        remove_directory_recursive(prep_output_dir);
     }
     
     // Test 3: prepare_directory with non-existent path (error handling)
@@ -531,8 +570,7 @@ int main() {
     }
     
     // Cleanup test directory
-    snprintf(command, sizeof(command), "rm -rf %s", prep_test_dir);
-    system(command);
+    remove_directory_recursive(prep_test_dir);
     
     printf("All prepare_directory tests passed!\n");
     
@@ -593,8 +631,7 @@ int main() {
         }
         
         // Clean output directory
-        snprintf(command, sizeof(command), "rm -rf %s", restore_output_dir);
-        system(command);
+        remove_directory_recursive(restore_output_dir);
         
         // Use restore_directory to extract
         result = restore_directory(data, restore_output_dir, true, false);
@@ -621,8 +658,7 @@ int main() {
         free(data);
         
         // Cleanup
-        snprintf(command, sizeof(command), "rm -rf %s", restore_output_dir);
-        system(command);
+        remove_directory_recursive(restore_output_dir);
     }
     
     // Test 2: restore_directory with NULL output path (restore to current directory)
@@ -641,8 +677,7 @@ int main() {
         dir_name = (dir_name != NULL) ? dir_name + 1 : restore_abs_path;
         
         // Clean any existing directory with same name in current directory
-        snprintf(command, sizeof(command), "rm -rf ./%s", dir_name);
-        system(command);
+        remove_directory_recursive(dir_name);
         
         // Use restore_directory with NULL output
         result = restore_directory(data, NULL, true, false);
@@ -656,8 +691,7 @@ int main() {
         if (compare_directories(restore_test_dir_rel, dir_name) != 0) {
             fprintf(stderr, "Error: Directories do not match after restore_directory with NULL output\n");
             free(data);
-            snprintf(command, sizeof(command), "rm -rf ./%s", dir_name);
-            system(command);
+            remove_directory_recursive(dir_name);
             return 1;
         }
         
@@ -665,8 +699,7 @@ int main() {
         free(data);
         
         // Cleanup
-        snprintf(command, sizeof(command), "rm -rf ./%s", dir_name);
-        system(command);
+        remove_directory_recursive(dir_name);
     }
     
     // Test 3: restore_directory with force flag (overwrite existing)
@@ -681,8 +714,7 @@ int main() {
         }
         
         // Clean output directory and create fresh
-        snprintf(command, sizeof(command), "rm -rf %s", restore_output_dir);
-        system(command);
+        remove_directory_recursive(restore_output_dir);
         
         // First extraction
         result = restore_directory(data, restore_output_dir, true, false);
@@ -704,13 +736,11 @@ int main() {
         free(data);
         
         // Cleanup
-        snprintf(command, sizeof(command), "rm -rf %s", restore_output_dir);
-        system(command);
+        remove_directory_recursive(restore_output_dir);
     }
     
     // Cleanup test directory
-    snprintf(command, sizeof(command), "rm -rf %s", restore_test_dir_rel);
-    system(command);
+    remove_directory_recursive(restore_test_dir_rel);
     
     printf("All restore_directory tests passed!\n");
 
@@ -861,8 +891,7 @@ int main() {
         }
         
         // Extract the directory
-        snprintf(command, sizeof(command), "rm -rf %s", perm_output_dir);
-        system(command);
+        remove_directory_recursive(perm_output_dir);
         mkdir(perm_output_dir, 0755);
         
         if (extract_directory(perm_output_dir, perm_deserialized, perm_deser_size, true, false) != 0) {
@@ -960,13 +989,11 @@ int main() {
         }
         free(perm_deserialized);
         
-        snprintf(command, sizeof(command), "rm -rf %s", perm_output_dir);
-        system(command);
+        remove_directory_recursive(perm_output_dir);
     }
     
     // Cleanup test directory
-    snprintf(command, sizeof(command), "rm -rf %s", perm_test_dir);
-    system(command);
+    remove_directory_recursive(perm_test_dir);
     
     printf("All directory permissions tests passed!\n");
 
@@ -1021,8 +1048,7 @@ int main() {
         int deep_deser_size = deserialize_archive(&deep_deserialized, deep_buffer);
         assert(deep_deser_size > 0);
         
-        snprintf(command, sizeof(command), "rm -rf %s", deep_output_dir);
-        system(command);
+        remove_directory_recursive(deep_output_dir);
         mkdir(deep_output_dir, 0755);
         
         assert(extract_directory(deep_output_dir, deep_deserialized, deep_deser_size, true, false) == 0);
@@ -1030,28 +1056,10 @@ int main() {
         
         // Cleanup
         free(deep_buffer);
-        for (int i = 0; i < deep_archive_size; i++) {
-            if (deep_archive[i].is_dir) {
-                free(deep_archive[i].dir_path);
-            } else {
-                free(deep_archive[i].file_path);
-                free(deep_archive[i].file_data);
-            }
-        }
-        free(deep_archive);
-        for (int i = 0; i < deep_deser_size; i++) {
-            if (deep_deserialized[i].is_dir) {
-                free(deep_deserialized[i].dir_path);
-            } else {
-                free(deep_deserialized[i].file_path);
-                free(deep_deserialized[i].file_data);
-            }
-        }
-        free(deep_deserialized);
-        snprintf(command, sizeof(command), "rm -rf %s", deep_test_dir);
-        system(command);
-        snprintf(command, sizeof(command), "rm -rf %s", deep_output_dir);
-        system(command);
+        free_directory_items(deep_archive, deep_archive_size);
+        free_directory_items(deep_deserialized, deep_deser_size);
+        remove_directory_recursive(deep_test_dir);
+        remove_directory_recursive(deep_output_dir);
         
         printf("    Deep nested directory test passed.\n");
     }
@@ -1095,8 +1103,7 @@ int main() {
         int many_deser_size = deserialize_archive(&many_deserialized, many_buffer);
         assert(many_deser_size > 0);
         
-        snprintf(command, sizeof(command), "rm -rf %s", many_output_dir);
-        system(command);
+        remove_directory_recursive(many_output_dir);
         mkdir(many_output_dir, 0755);
         
         assert(extract_directory(many_output_dir, many_deserialized, many_deser_size, true, false) == 0);
@@ -1104,28 +1111,10 @@ int main() {
         
         // Cleanup
         free(many_buffer);
-        for (int i = 0; i < many_archive_size; i++) {
-            if (many_archive[i].is_dir) {
-                free(many_archive[i].dir_path);
-            } else {
-                free(many_archive[i].file_path);
-                free(many_archive[i].file_data);
-            }
-        }
-        free(many_archive);
-        for (int i = 0; i < many_deser_size; i++) {
-            if (many_deserialized[i].is_dir) {
-                free(many_deserialized[i].dir_path);
-            } else {
-                free(many_deserialized[i].file_path);
-                free(many_deserialized[i].file_data);
-            }
-        }
-        free(many_deserialized);
-        snprintf(command, sizeof(command), "rm -rf %s", many_test_dir);
-        system(command);
-        snprintf(command, sizeof(command), "rm -rf %s", many_output_dir);
-        system(command);
+        free_directory_items(many_archive, many_archive_size);
+        free_directory_items(many_deserialized, many_deser_size);
+        remove_directory_recursive(many_test_dir);
+        remove_directory_recursive(many_output_dir);
         
         printf("    Directory with many files test passed.\n");
     }
@@ -1176,8 +1165,7 @@ int main() {
         int special_deser_size = deserialize_archive(&special_deserialized, special_buffer);
         assert(special_deser_size > 0);
         
-        snprintf(command, sizeof(command), "rm -rf %s", special_output_dir);
-        system(command);
+        remove_directory_recursive(special_output_dir);
         mkdir(special_output_dir, 0755);
         
         assert(extract_directory(special_output_dir, special_deserialized, special_deser_size, true, false) == 0);
@@ -1185,28 +1173,10 @@ int main() {
         
         // Cleanup
         free(special_buffer);
-        for (int i = 0; i < special_archive_size; i++) {
-            if (special_archive[i].is_dir) {
-                free(special_archive[i].dir_path);
-            } else {
-                free(special_archive[i].file_path);
-                free(special_archive[i].file_data);
-            }
-        }
-        free(special_archive);
-        for (int i = 0; i < special_deser_size; i++) {
-            if (special_deserialized[i].is_dir) {
-                free(special_deserialized[i].dir_path);
-            } else {
-                free(special_deserialized[i].file_path);
-                free(special_deserialized[i].file_data);
-            }
-        }
-        free(special_deserialized);
-        snprintf(command, sizeof(command), "rm -rf %s", special_test_dir);
-        system(command);
-        snprintf(command, sizeof(command), "rm -rf %s", special_output_dir);
-        system(command);
+        free_directory_items(special_archive, special_archive_size);
+        free_directory_items(special_deserialized, special_deser_size);
+        remove_directory_recursive(special_test_dir);
+        remove_directory_recursive(special_output_dir);
         
         printf("    Files with special characters test passed.\n");
     }
@@ -1251,8 +1221,7 @@ int main() {
         int large_deser_size = deserialize_archive(&large_deserialized, large_buffer);
         assert(large_deser_size > 0);
         
-        snprintf(command, sizeof(command), "rm -rf %s", large_output_dir);
-        system(command);
+        remove_directory_recursive(large_output_dir);
         mkdir(large_output_dir, 0755);
         
         assert(extract_directory(large_output_dir, large_deserialized, large_deser_size, true, false) == 0);
@@ -1260,28 +1229,10 @@ int main() {
         
         // Cleanup
         free(large_buffer);
-        for (int i = 0; i < large_archive_size; i++) {
-            if (large_archive[i].is_dir) {
-                free(large_archive[i].dir_path);
-            } else {
-                free(large_archive[i].file_path);
-                free(large_archive[i].file_data);
-            }
-        }
-        free(large_archive);
-        for (int i = 0; i < large_deser_size; i++) {
-            if (large_deserialized[i].is_dir) {
-                free(large_deserialized[i].dir_path);
-            } else {
-                free(large_deserialized[i].file_path);
-                free(large_deserialized[i].file_data);
-            }
-        }
-        free(large_deserialized);
-        snprintf(command, sizeof(command), "rm -rf %s", large_test_dir);
-        system(command);
-        snprintf(command, sizeof(command), "rm -rf %s", large_output_dir);
-        system(command);
+        free_directory_items(large_archive, large_archive_size);
+        free_directory_items(large_deserialized, large_deser_size);
+        remove_directory_recursive(large_test_dir);
+        remove_directory_recursive(large_output_dir);
         
         printf("    Large files in directory test passed.\n");
     }
@@ -1324,8 +1275,7 @@ int main() {
         int empty_deser_size = deserialize_archive(&empty_deserialized, empty_buffer);
         assert(empty_deser_size > 0);
         
-        snprintf(command, sizeof(command), "rm -rf %s", empty_output_dir);
-        system(command);
+        remove_directory_recursive(empty_output_dir);
         mkdir(empty_output_dir, 0755);
         
         assert(extract_directory(empty_output_dir, empty_deserialized, empty_deser_size, true, false) == 0);
@@ -1333,28 +1283,10 @@ int main() {
         
         // Cleanup
         free(empty_buffer);
-        for (int i = 0; i < empty_archive_size; i++) {
-            if (empty_archive[i].is_dir) {
-                free(empty_archive[i].dir_path);
-            } else {
-                free(empty_archive[i].file_path);
-                free(empty_archive[i].file_data);
-            }
-        }
-        free(empty_archive);
-        for (int i = 0; i < empty_deser_size; i++) {
-            if (empty_deserialized[i].is_dir) {
-                free(empty_deserialized[i].dir_path);
-            } else {
-                free(empty_deserialized[i].file_path);
-                free(empty_deserialized[i].file_data);
-            }
-        }
-        free(empty_deserialized);
-        snprintf(command, sizeof(command), "rm -rf %s", empty_test_dir);
-        system(command);
-        snprintf(command, sizeof(command), "rm -rf %s", empty_output_dir);
-        system(command);
+        free_directory_items(empty_archive, empty_archive_size);
+        free_directory_items(empty_deserialized, empty_deser_size);
+        remove_directory_recursive(empty_test_dir);
+        remove_directory_recursive(empty_output_dir);
         
         printf("    Empty files in directory test passed.\n");
     }
@@ -1400,8 +1332,7 @@ int main() {
         int binary_deser_size = deserialize_archive(&binary_deserialized, binary_buffer);
         assert(binary_deser_size > 0);
         
-        snprintf(command, sizeof(command), "rm -rf %s", binary_output_dir);
-        system(command);
+        remove_directory_recursive(binary_output_dir);
         mkdir(binary_output_dir, 0755);
         
         assert(extract_directory(binary_output_dir, binary_deserialized, binary_deser_size, true, false) == 0);
@@ -1409,28 +1340,10 @@ int main() {
         
         // Cleanup
         free(binary_buffer);
-        for (int i = 0; i < binary_archive_size; i++) {
-            if (binary_archive[i].is_dir) {
-                free(binary_archive[i].dir_path);
-            } else {
-                free(binary_archive[i].file_path);
-                free(binary_archive[i].file_data);
-            }
-        }
-        free(binary_archive);
-        for (int i = 0; i < binary_deser_size; i++) {
-            if (binary_deserialized[i].is_dir) {
-                free(binary_deserialized[i].dir_path);
-            } else {
-                free(binary_deserialized[i].file_path);
-                free(binary_deserialized[i].file_data);
-            }
-        }
-        free(binary_deserialized);
-        snprintf(command, sizeof(command), "rm -rf %s", binary_test_dir);
-        system(command);
-        snprintf(command, sizeof(command), "rm -rf %s", binary_output_dir);
-        system(command);
+        free_directory_items(binary_archive, binary_archive_size);
+        free_directory_items(binary_deserialized, binary_deser_size);
+        remove_directory_recursive(binary_test_dir);
+        remove_directory_recursive(binary_output_dir);
         
         printf("    Binary files in directory test passed.\n");
     }
