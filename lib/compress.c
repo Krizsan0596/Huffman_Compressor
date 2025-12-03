@@ -380,13 +380,13 @@ int run_compression(Arguments args, char *data, long data_len, long directory_si
             }
         }
         else {
-            int original_size_display = (int)data_len;
-            int compressed_size_display = write_res;
+            int original_size = (int)data_len;
+            int compressed_size = write_res;
             printf("Tomorites kesz.\n"
                     "Eredeti meret:    %d%s\n"
                     "Tomoritett meret: %d%s\n"
-                    "Tomorites aranya: %.2f%%\n", original_size_display, get_unit(&original_size_display),
-                                                compressed_size_display, get_unit(&compressed_size_display),
+                    "Tomorites aranya: %.2f%%\n", original_size, get_unit(&original_size),
+                                                compressed_size, get_unit(&compressed_size),
                                                 (double)write_res/(args.directory ? directory_size : data_len) * 100);
         }
         break;
