@@ -70,7 +70,10 @@ typedef enum {
 typedef struct {
     bool is_dir;
     union {
-        char *dir_path;
+        struct {
+            char *dir_path;
+            int perms;
+        };
         struct {
             long file_size;
             char *file_path;
