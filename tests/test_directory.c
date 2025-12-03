@@ -36,6 +36,10 @@ static int remove_directory_recursive(const char *path) {
                 int ret = unlink(full_path);
                 if (ret != 0) result = ret;
             }
+        } else {
+            // Attempt to remove anyway (could be a broken symlink, etc.)
+            int ret = unlink(full_path);
+            if (ret != 0) result = ret;
         }
     }
     closedir(dir);
