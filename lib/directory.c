@@ -167,44 +167,33 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
  * Szerializalja az archivalt mappat egy bufferbe.
  * Siker eseten a buffer meretet adja vissza, hiba eseten negativ kodot.
  */
-long serialize_archive(Directory_item *archive, int archive_size, char **buffer) {
-    if (archive_size == 0) return EMPTY_DIRECTORY;
-    int data_size = sizeof(int);
-    for (int i = 0; i < archive_size; i++) {
-        data_size += sizeof(bool);
-        if (archive[i].is_dir) {
-            data_size += sizeof(int);
-            data_size += strlen(archive[i].dir_path) + 1;
-        }
-        else {
-            data_size += sizeof(long);
-            data_size += strlen(archive[i].file_path) + 1;
-            data_size += archive[i].file_size;
-        }
+long serialize_archive(Directory_item *item, FILE *output) {
+    if (item == NULL || output == NULL) return FILE_WRITE_ERROR;
+
+    long data_size = sizeof(bool);
+    if (item->is_dir) {
+        data_size += sizeof(int);
+        data_size += strlen(item->dir_path) + 1;
     }
-    *buffer = malloc(data_size);
-    if (*buffer == NULL) return MALLOC_ERROR;
-    char *current = *buffer;
-    memcpy(current, &archive_size, sizeof(int));
-    current += sizeof(int);
-    for (int i = 0; i < archive_size; i++) {
-        memcpy(current, &archive[i].is_dir, sizeof(bool));
-        current += sizeof(bool);
-        if (archive[i].is_dir) {
-            memcpy(current, &archive[i].perms, sizeof(int));
-            current += sizeof(int);
-            memcpy(current, archive[i].dir_path, strlen(archive[i].dir_path) + 1);
-            current += strlen(archive[i].dir_path) + 1;
-        }
-        else {
-            memcpy(current, &archive[i].file_size, sizeof(long));
-            current += sizeof(long);
-            memcpy(current, archive[i].file_path, strlen(archive[i].file_path) + 1);
-            current += strlen(archive[i].file_path) + 1;
-            memcpy(current, archive[i].file_data, archive[i].file_size);
-            current += archive[i].file_size;
-        }
+    else {
+        data_size += sizeof(long);
+        data_size += strlen(item->file_path) + 1;
+        data_size += item->file_size;
     }
+
+    if (fwrite(&item->is_dir, sizeof(bool), 1, output) != 1) return FILE_WRITE_ERROR;
+    if (item->is_dir) {
+        if (fwrite(&item->perms, sizeof(int), 1, output) != 1) return FILE_WRITE_ERROR;
+        size_t path_len = strlen(item->dir_path) + 1;
+        if (fwrite(item->dir_path, 1, path_len, output) != path_len) return FILE_WRITE_ERROR;
+    }
+    else {
+        if (fwrite(&item->file_size, sizeof(long), 1, output) != 1) return FILE_WRITE_ERROR;
+        size_t path_len = strlen(item->file_path) + 1;
+        if (fwrite(item->file_path, 1, path_len, output) != path_len) return FILE_WRITE_ERROR;
+        if (item->file_size > 0 && fwrite(item->file_data, 1, item->file_size, output) != (size_t)item->file_size) return FILE_WRITE_ERROR;
+    }
+
     return data_size;
 }
 
@@ -321,8 +310,9 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
     Directory_item *archive = NULL;
     int archive_size = 0;
     int current_index = 0;
-    int data_len = 0;  
-    
+    int data_len = 0;
+    FILE *stream = NULL;
+
     while (true) {
         if (getcwd(current_path, sizeof(current_path)) == NULL) {
             printf("Nem sikerult elmenteni az utat.\n");
@@ -382,28 +372,72 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
             break;
         }
         
-        data_len = serialize_archive(archive, archive_size, data);
-        if (data_len < 0) {
-            if (data_len == MALLOC_ERROR) {
-                printf("Nem sikerult lefoglalni a memoriat a szerializalaskor.\n");
-            } else if (data_len == EMPTY_DIRECTORY) {
-                printf("A mappa ures.\n");
-            } else {
-                printf("Nem sikerult a mappa szerializalasa.\n");
-            }
+        if (archive_size == 0) {
+            printf("A mappa ures.\n");
+            data_len = EMPTY_DIRECTORY;
             if (sep != NULL) {
                 if (chdir(current_path) != 0) {
                     printf("Nem sikerult kilepni a mappabol.\n");
                     data_len = DIRECTORY_ERROR;
-                    if (*data != NULL) {
-                        free(*data);
-                        *data = NULL;
-                    }
                 }
             }
             break;
         }
-        
+
+        stream = tmpfile();
+        if (stream == NULL) {
+            printf("Nem sikerult letrehozni az ideiglenes fajlt a szerializalashoz.\n");
+            data_len = FILE_WRITE_ERROR;
+            if (sep != NULL) {
+                if (chdir(current_path) != 0) {
+                    printf("Nem sikerult kilepni a mappabol.\n");
+                    data_len = DIRECTORY_ERROR;
+                }
+            }
+            break;
+        }
+
+        if (fwrite(&archive_size, sizeof(int), 1, stream) != 1) {
+            printf("Nem sikerult a mappa szerializalasa.\n");
+            data_len = FILE_WRITE_ERROR;
+            break;
+        }
+
+        for (int i = 0; i < archive_size; i++) {
+            long written = serialize_archive(&archive[i], stream);
+            if (written < 0) {
+                printf("Nem sikerult a mappa szerializalasa.\n");
+                data_len = written;
+                break;
+            }
+        }
+        if (data_len < 0) break;
+
+        long file_size = ftell(stream);
+        if (file_size < 0 || fseek(stream, 0, SEEK_SET) != 0) {
+            printf("Nem sikerult a mappa szerializalasa.\n");
+            data_len = FILE_WRITE_ERROR;
+            break;
+        }
+
+        *data = malloc(file_size);
+        if (*data == NULL) {
+            printf("Nem sikerult lefoglalni a memoriat a szerializalaskor.\n");
+            data_len = MALLOC_ERROR;
+            break;
+        }
+
+        size_t read_bytes = fread(*data, 1, file_size, stream);
+        if (read_bytes != (size_t)file_size) {
+            printf("Nem sikerult a mappa szerializalasa.\n");
+            free(*data);
+            *data = NULL;
+            data_len = FILE_WRITE_ERROR;
+            break;
+        }
+
+        data_len = file_size;
+
         /* Visszalepunk az eredeti mappaba. */
         if (sep != NULL) {
             if (chdir(current_path) != 0) {
@@ -418,7 +452,11 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
         }
         break;
     }
-    
+
+    if (stream != NULL) {
+        fclose(stream);
+    }
+
     if (archive_size > 0) {
         for (int i = 0; i < archive_size; ++i) {
             if (archive[i].is_dir) {
