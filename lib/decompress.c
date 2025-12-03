@@ -58,14 +58,21 @@ int decompress(Compressed_file *compressed, char *raw) {
 }
 
 /*
- * Beolvassa a tomoritett fajlt, dekodolja a Huffman adatokat es kiirja a kapott tartalmat.
- * Mappa eseten letrehozza a fajlszerkezetet, siker eseten 0-val ter vissza.
+ * Beolvassa a tomoritett fajlt, dekodolja a Huffman adatokat es visszaadja a nyers tartalmat.
+ * A kimenet feldolgozasarol (fajl iras, mappa visszaallitasa) a hivo gondoskodik. A ki-
+ * menetkent adott pointereknek ervenyes, nem NULL ertekeknek kell lenniuk, mert a hivo
+ * (a fo orchestracio) szallitja oket.
  */
-int run_decompression(Arguments args) {
+int run_decompression(Arguments args, char **raw_data, long *raw_size, bool *is_directory, char **original_name) {
+    *raw_data = NULL;
+    *raw_size = 0;
+    *is_directory = false;
+    *original_name = NULL;
+
     Compressed_file *compressed_file = NULL;
-    char *raw_data = NULL;
+    char *local_raw_data = NULL;
     int res = 0;
-    
+
     while (true) {
         compressed_file = calloc(1, sizeof(Compressed_file));
         if (compressed_file == NULL) {
@@ -73,7 +80,7 @@ int run_decompression(Arguments args) {
             res = ENOMEM;
             break;
         }
-        
+
         int read_res = read_compressed(args.input_file, compressed_file);
         if (read_res != 0) {
             if (read_res == FILE_MAGIC_ERROR) {
@@ -86,48 +93,40 @@ int run_decompression(Arguments args) {
             break;
         }
 
-        /* A tarolt flag jelzi, hogy mappa volt-e eredetileg: ez hatarozza meg a kimeneti utvonal felepitest. */
-        args.directory = compressed_file->is_dir;
-        
         if (compressed_file->original_size <= 0) {
             printf("A tomoritett fajl (%s) serult, nem sikerult beolvasni.\n", args.input_file);
             res = EINVAL;
             break;
         }
-        
-        raw_data = malloc(compressed_file->original_size * sizeof(char));
-        if (raw_data == NULL) {
+
+        local_raw_data = malloc(compressed_file->original_size * sizeof(char));
+        if (local_raw_data == NULL) {
             printf("Nem sikerult lefoglalni a memoriat.\n");
             res = ENOMEM;
             break;
         }
-        
-        int decompress_result = decompress(compressed_file, raw_data);
+
+        int decompress_result = decompress(compressed_file, local_raw_data);
         if (decompress_result != 0) {
             printf("Nem sikerult a kitomorites.\n");
             res = EIO;
             break;
         }
 
-        if (args.directory) {
-            int ret = restore_directory(raw_data, args.output_file, args.force, args.no_preserve_perms);
-            if (ret != 0) {
-                res = ret;
-                break;
-            }
+        *raw_data = local_raw_data;
+        *raw_size = compressed_file->original_size;
+        *is_directory = compressed_file->is_dir;
+        *original_name = strdup(compressed_file->original_file);
+        if (*original_name == NULL) {
+            printf("Nem sikerult lefoglalni a memoriat.\n");
+            res = ENOMEM;
+            break;
         }
-        else {
-            int write_res = write_raw(args.output_file != NULL ? args.output_file : compressed_file->original_file, raw_data, compressed_file->original_size, args.force);
-            if (write_res < 0) {
-                printf("Hiba tortent a kimeneti fajl (%s) irasa kozben.\n", args.output_file != NULL ? args.output_file : compressed_file->original_file);
-                res = EIO;
-                break;
-            }
-        }
+        local_raw_data = NULL;
         break;
     }
-    
-    free(raw_data);
+
+    free(local_raw_data);
     if (compressed_file != NULL) {
         free(compressed_file->file_name);
         free(compressed_file->original_file);

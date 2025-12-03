@@ -264,10 +264,12 @@ int compress(char *original_data, long data_len, Node *nodes, Node *root_node, c
 }
 
 /*
- * A bemeneti fajlt vagy mappat beolvassa, felepit egy Huffman fat es kiirja a tomoritett adatot.
- * Siker eseten 0-t, hiba eseten negativ hibakodot ad vissza.
+ * A mar elokeszitett nyers adatot felhasznalva felepit egy Huffman fat es kiirja a tomoritett adatot.
+ * A hivas elott gondoskodni kell a nyers adat eloallitasarol (fajl beolvasas, mappa szerializacio).
+ * A mappat jelzo modot az args.directory mezobol olvassa ki. Siker eseten 0-t, hiba eseten
+ * negativ hibakodot ad vissza.
  */
-int run_compression(Arguments args) {
+int run_compression(Arguments args, char *data, long data_len, long directory_size) {
     // Ha nem adott meg kimeneti fajlt a felhasznalo, general egyet.
     bool output_generated = false;
     if (args.output_file == NULL) {
@@ -276,33 +278,6 @@ int run_compression(Arguments args) {
         if (args.output_file == NULL) {
             printf("Nem sikerult lefoglalni a memoriat.\n");
             return ENOMEM;
-        }
-    }
-    char *data = NULL;
-    int data_len = 0;
-    int directory_size = 0;
-
-    if (args.directory) {
-        data_len = prepare_directory(args.input_file, &data, &directory_size);
-        if (data_len < 0) {
-            if (output_generated) {
-                free(args.output_file);
-            }
-            return data_len;
-        }
-    }
-    else {
-        data_len = read_raw(args.input_file, &data);
-        if (data_len < 0) {
-            if (data_len == EMPTY_FILE) {
-                printf("A fajl (%s) ures.\n", args.input_file);
-            } else {
-                printf("Nem sikerult megnyitni a fajlt (%s).\n", args.input_file);
-            }
-            if (output_generated) {
-                free(args.output_file);
-            }
-            return data_len;
         }
     }
 
@@ -405,11 +380,13 @@ int run_compression(Arguments args) {
             }
         }
         else {
+            int original_size_display = (int)data_len;
+            int compressed_size_display = write_res;
             printf("Tomorites kesz.\n"
                     "Eredeti meret:    %d%s\n"
                     "Tomoritett meret: %d%s\n"
-                    "Tomorites aranya: %.2f%%\n", data_len, get_unit(&data_len), 
-                                                write_res, get_unit(&write_res), 
+                    "Tomorites aranya: %.2f%%\n", original_size_display, get_unit(&original_size_display),
+                                                compressed_size_display, get_unit(&compressed_size_display),
                                                 (double)write_res/(args.directory ? directory_size : data_len) * 100);
         }
         break;
@@ -430,7 +407,6 @@ int run_compression(Arguments args) {
         }
         free(cache);
     }
-    free(data);
     if (write_res < 0) res = write_res;
     return res;
 }

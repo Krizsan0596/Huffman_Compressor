@@ -12,6 +12,7 @@
 #include "../lib/compress.h"
 #include "../lib/data_types.h"
 #include "../lib/debugmalloc.h"
+#include "../lib/directory.h"
 
 // Helper function to recursively delete a directory
 static int remove_directory_recursive(const char *path) {
@@ -57,6 +58,33 @@ static void free_cache(char **cache) {
         }
     }
     free(cache);
+}
+
+static int invoke_run_compression(Arguments args) {
+    char *data = NULL;
+    long data_len = 0;
+    long directory_size = 0;
+
+    if (args.directory) {
+        int directory_size_int = 0;
+        int prep_res = prepare_directory(args.input_file, &data, &directory_size_int);
+        if (prep_res < 0) {
+            return prep_res;
+        }
+        data_len = prep_res;
+        directory_size = directory_size_int;
+    } else {
+        int read_res = read_raw(args.input_file, &data);
+        if (read_res < 0) {
+            return read_res;
+        }
+        data_len = read_res;
+        directory_size = data_len;
+    }
+
+    int result = run_compression(args, data, data_len, directory_size);
+    free(data);
+    return result;
 }
 
 static void build_huffman_tree(const char *input, long len, Node **out_nodes, Node **out_root) {
@@ -159,7 +187,7 @@ static void test_run_compression_basic_file(void) {
     args.input_file = test_file;
     args.output_file = output_file;
     
-    int result = run_compression(args);
+    int result = invoke_run_compression(args);
     assert(result == 0);
     
     // Verify output file was created
@@ -194,7 +222,7 @@ static void test_run_compression_auto_output_filename(void) {
     args.input_file = (char *)test_file;
     args.output_file = NULL;  // Should auto-generate
     
-    int result = run_compression(args);
+    int result = invoke_run_compression(args);
     assert(result == 0);
     
     // Verify output file was created with expected name
@@ -216,7 +244,7 @@ static void test_run_compression_nonexistent_file(void) {
     args.input_file = "/tmp/nonexistent_file_12345.txt";
     args.output_file = "/tmp/test_output.huff";
     
-    int result = run_compression(args);
+    int result = invoke_run_compression(args);
     // Should return an error for non-existent file
     assert(result < 0);
 }
@@ -272,7 +300,7 @@ static void test_run_compression_directory(void) {
     args.input_file = (char *)test_dir;
     args.output_file = (char *)output_file;
     
-    int result = run_compression(args);
+    int result = invoke_run_compression(args);
     assert(result == 0);
     
     // Verify output file was created
@@ -323,7 +351,7 @@ static void test_run_compression_force_overwrite(void) {
     args.input_file = (char *)test_file;
     args.output_file = (char *)output_file;
     
-    int result = run_compression(args);
+    int result = invoke_run_compression(args);
     assert(result == 0);
     
     // Verify file was overwritten (modification time should be different)
@@ -356,7 +384,7 @@ static void test_run_compression_empty_file(void) {
     args.input_file = (char *)test_file;
     args.output_file = (char *)output_file;
     
-    int result = run_compression(args);
+    int result = invoke_run_compression(args);
     // Empty file should return EMPTY_FILE error
     assert(result == EMPTY_FILE);
     
@@ -489,7 +517,7 @@ static void test_run_compression_moderately_large_file(void) {
     args.input_file = (char *)test_file;
     args.output_file = (char *)output_file;
     
-    int result = run_compression(args);
+    int result = invoke_run_compression(args);
     assert(result == 0);
     
     struct stat st;
@@ -520,7 +548,7 @@ static void test_run_compression_special_chars_in_filename(void) {
     args.input_file = (char *)test_file;
     args.output_file = (char *)output_file;
     
-    int result = run_compression(args);
+    int result = invoke_run_compression(args);
     assert(result == 0);
     
     struct stat st;
@@ -551,7 +579,7 @@ static void test_run_compression_readonly_input(void) {
     args.input_file = (char *)test_file;
     args.output_file = (char *)output_file;
     
-    int result = run_compression(args);
+    int result = invoke_run_compression(args);
     assert(result == 0);
     
     struct stat st;
@@ -579,7 +607,7 @@ static void test_run_compression_empty_directory(void) {
     args.input_file = (char *)test_dir;
     args.output_file = (char *)output_file;
     
-    int result = run_compression(args);
+    int result = invoke_run_compression(args);
     assert(result == 0);
     
     struct stat st;
@@ -614,7 +642,7 @@ static void test_run_compression_nested_empty_directories(void) {
     args.input_file = (char *)test_dir;
     args.output_file = (char *)output_file;
     
-    int result = run_compression(args);
+    int result = invoke_run_compression(args);
     assert(result == 0);
     
     struct stat st;
@@ -643,7 +671,7 @@ static void test_run_compression_single_byte_file(void) {
     args.input_file = (char *)test_file;
     args.output_file = (char *)output_file;
     
-    int result = run_compression(args);
+    int result = invoke_run_compression(args);
     assert(result == 0);
     
     struct stat st;
