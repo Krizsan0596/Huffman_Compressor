@@ -893,9 +893,9 @@ int main() {
         int ext_700_mode = 0, ext_750_mode = 0, ext_755_mode = 0;
         
         char ext_700_path[256], ext_750_path[256], ext_755_path[256];
-        snprintf(ext_700_path, sizeof(ext_700_path), "%s/./subdir_700", perm_output_dir);
-        snprintf(ext_750_path, sizeof(ext_750_path), "%s/./subdir_750", perm_output_dir);
-        snprintf(ext_755_path, sizeof(ext_755_path), "%s/./subdir_755", perm_output_dir);
+        snprintf(ext_700_path, sizeof(ext_700_path), "%s/subdir_700", perm_output_dir);
+        snprintf(ext_750_path, sizeof(ext_750_path), "%s/subdir_750", perm_output_dir);
+        snprintf(ext_755_path, sizeof(ext_755_path), "%s/subdir_755", perm_output_dir);
         
         if (stat(ext_700_path, &ext_st_700) == 0) {
             ext_700_mode = ext_st_700.st_mode & 0777;
