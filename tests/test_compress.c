@@ -7,10 +7,40 @@
 #include <unistd.h>
 #include <errno.h>
 #include <time.h>
+#include <dirent.h>
 #include "../lib/file.h"
 #include "../lib/compress.h"
 #include "../lib/data_types.h"
 #include "../lib/debugmalloc.h"
+
+// Helper function to recursively delete a directory
+static int remove_directory_recursive(const char *path) {
+    DIR *dir = opendir(path);
+    if (dir == NULL) {
+        return unlink(path);
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        char full_path[1024];
+        snprintf(full_path, sizeof(full_path), "%s/%s", path, entry->d_name);
+
+        struct stat st;
+        if (stat(full_path, &st) == 0) {
+            if (S_ISDIR(st.st_mode)) {
+                remove_directory_recursive(full_path);
+            } else {
+                unlink(full_path);
+            }
+        }
+    }
+    closedir(dir);
+    return rmdir(path);
+}
 
 static void free_cache(char **cache) {
     for (int i = 0; i < 256; ++i) {
@@ -190,15 +220,13 @@ static void test_run_compression_directory(void) {
     char subdir_path[256];
     char file1_path[256];
     char file2_path[256];
-    char cmd[256];
     
     snprintf(subdir_path, sizeof(subdir_path), "%s/subdir", test_dir);
     snprintf(file1_path, sizeof(file1_path), "%s/file1.txt", test_dir);
     snprintf(file2_path, sizeof(file2_path), "%s/subdir/file2.txt", test_dir);
     
     // Remove any existing directory (follows existing test patterns)
-    snprintf(cmd, sizeof(cmd), "rm -rf %s", test_dir);
-    system(cmd);
+    remove_directory_recursive(test_dir);
     unlink(output_file);
     
     // Create directories with error checking
@@ -245,8 +273,7 @@ static void test_run_compression_directory(void) {
     assert(st.st_size > 0);
     
     // Cleanup (follows existing test patterns)
-    snprintf(cmd, sizeof(cmd), "rm -rf %s", test_dir);
-    system(cmd);
+    remove_directory_recursive(test_dir);
     unlink(output_file);
 }
 
@@ -530,10 +557,8 @@ static void test_run_compression_readonly_input(void) {
 static void test_run_compression_empty_directory(void) {
     const char *test_dir = "/tmp/test_empty_dir";
     const char *output_file = "/tmp/test_empty_dir.huff";
-    char cmd[256];
     
-    snprintf(cmd, sizeof(cmd), "rm -rf %s", test_dir);
-    system(cmd);
+    remove_directory_recursive(test_dir);
     unlink(output_file);
     
     mkdir(test_dir, 0755);
@@ -552,19 +577,16 @@ static void test_run_compression_empty_directory(void) {
     struct stat st;
     assert(stat(output_file, &st) == 0);
     
-    snprintf(cmd, sizeof(cmd), "rm -rf %s", test_dir);
-    system(cmd);
+    remove_directory_recursive(test_dir);
     unlink(output_file);
 }
 
 static void test_run_compression_nested_empty_directories(void) {
     const char *test_dir = "/tmp/test_nested_empty_dir";
     const char *output_file = "/tmp/test_nested_empty_dir.huff";
-    char cmd[256];
     char subdir1[256], subdir2[256], subdir3[256];
     
-    snprintf(cmd, sizeof(cmd), "rm -rf %s", test_dir);
-    system(cmd);
+    remove_directory_recursive(test_dir);
     unlink(output_file);
     
     mkdir(test_dir, 0755);
@@ -590,8 +612,7 @@ static void test_run_compression_nested_empty_directories(void) {
     struct stat st;
     assert(stat(output_file, &st) == 0);
     
-    snprintf(cmd, sizeof(cmd), "rm -rf %s", test_dir);
-    system(cmd);
+    remove_directory_recursive(test_dir);
     unlink(output_file);
 }
 
