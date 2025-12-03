@@ -70,7 +70,6 @@ int run_decompression(Arguments args, char **raw_data, long *raw_size, bool *is_
     *original_name = NULL;
 
     Compressed_file *compressed_file = NULL;
-    char *local_raw_data = NULL;
     int res = 0;
 
     while (true) {
@@ -99,21 +98,20 @@ int run_decompression(Arguments args, char **raw_data, long *raw_size, bool *is_
             break;
         }
 
-        local_raw_data = malloc(compressed_file->original_size * sizeof(char));
-        if (local_raw_data == NULL) {
+        raw_data = malloc(compressed_file->original_size * sizeof(char));
+        if (raw_data == NULL) {
             printf("Nem sikerult lefoglalni a memoriat.\n");
             res = ENOMEM;
             break;
         }
 
-        int decompress_result = decompress(compressed_file, local_raw_data);
+        int decompress_result = decompress(compressed_file, *raw_data);
         if (decompress_result != 0) {
             printf("Nem sikerult a kitomorites.\n");
             res = EIO;
             break;
         }
 
-        *raw_data = local_raw_data;
         *raw_size = compressed_file->original_size;
         *is_directory = compressed_file->is_dir;
         *original_name = strdup(compressed_file->original_file);
@@ -122,11 +120,9 @@ int run_decompression(Arguments args, char **raw_data, long *raw_size, bool *is_
             res = ENOMEM;
             break;
         }
-        local_raw_data = NULL;
         break;
     }
 
-    free(local_raw_data);
     if (compressed_file != NULL) {
         free(compressed_file->file_name);
         free(compressed_file->original_file);
