@@ -165,10 +165,64 @@ int main(int argc, char* argv[]){
     }
     
     if (args.compress_mode) {
-        return run_compression(args);
+        char *data = NULL;
+        long data_len = 0;
+        long directory_size = 0;
+        int directory_size_int = 0;
+
+        if (args.directory) {
+            int prep_res = prepare_directory(args.input_file, &data, &directory_size_int);
+            if (prep_res < 0) {
+                return prep_res;
+            }
+            data_len = prep_res;
+            directory_size = directory_size_int;
+        } else {
+            int read_res = read_raw(args.input_file, &data);
+            if (read_res < 0) {
+                if (read_res == EMPTY_FILE) {
+                    printf("A fajl (%s) ures.\n", args.input_file);
+                } else {
+                    printf("Nem sikerult megnyitni a fajlt (%s).\n", args.input_file);
+                }
+                return read_res;
+            }
+            data_len = read_res;
+            directory_size = data_len;
+        }
+
+        int compress_res = run_compression(args, data, data_len, directory_size);
+        free(data);
+        return compress_res;
     } else if (args.extract_mode) {
-        return run_decompression(args);
-    } 
+        char *raw_data = NULL;
+        long raw_size = 0;
+        bool is_dir = false;
+        char *original_name = NULL;
+
+        int decomp_res = run_decompression(args, &raw_data, &raw_size, &is_dir, &original_name);
+        if (decomp_res != 0) {
+            free(raw_data);
+            free(original_name);
+            return decomp_res;
+        }
+
+        int res = 0;
+        if (is_dir) {
+            res = restore_directory(raw_data, args.output_file, args.force, args.no_preserve_perms);
+        } else {
+            char *target = args.output_file != NULL ? args.output_file : original_name;
+            int write_res = write_raw(target, raw_data, raw_size, args.force);
+            if (write_res < 0) {
+                printf("Hiba tortent a kimeneti fajl (%s) irasa kozben.\n", target);
+                res = EIO;
+            }
+        }
+
+        free(raw_data);
+        free(original_name);
+        return res;
+    }
     else {
         printf("Az egyik modot (-c vagy -x) meg kell adni.\n");
         print_usage(argv[0]);

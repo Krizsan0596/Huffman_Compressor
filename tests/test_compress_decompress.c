@@ -4,11 +4,69 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <assert.h>
+#include <errno.h>
 #include "../lib/compress.h"
 #include "../lib/decompress.h"
 #include "../lib/file.h"
 #include "../lib/data_types.h"
 #include "../lib/debugmalloc.h"
+#include "../lib/directory.h"
+
+static int invoke_run_compression(Arguments args) {
+    char *data = NULL;
+    long data_len = 0;
+    long directory_size = 0;
+
+    if (args.directory) {
+        int directory_size_int = 0;
+        int prep_res = prepare_directory(args.input_file, &data, &directory_size_int);
+        if (prep_res < 0) {
+            return prep_res;
+        }
+        data_len = prep_res;
+        directory_size = directory_size_int;
+    } else {
+        int read_res = read_raw(args.input_file, &data);
+        if (read_res < 0) {
+            return read_res;
+        }
+        data_len = read_res;
+        directory_size = data_len;
+    }
+
+    int result = run_compression(args, data, data_len, directory_size);
+    free(data);
+    return result;
+}
+
+static int invoke_run_decompression(Arguments args) {
+    char *raw_data = NULL;
+    long raw_size = 0;
+    bool is_dir = false;
+    char *original_name = NULL;
+
+    int res = run_decompression(args, &raw_data, &raw_size, &is_dir, &original_name);
+    if (res != 0) {
+        free(raw_data);
+        free(original_name);
+        return res;
+    }
+
+    if (is_dir) {
+        res = restore_directory(raw_data, args.output_file, args.force, args.no_preserve_perms);
+    } else {
+        char *target = args.output_file != NULL ? args.output_file : original_name;
+        int write_res = write_raw(target, raw_data, raw_size, args.force);
+        if (write_res < 0) {
+            printf("Hiba tortent a kimeneti fajl (%s) irasa kozben.\n", target);
+            res = EIO;
+        }
+    }
+
+    free(raw_data);
+    free(original_name);
+    return res;
+}
 
 int main() {
     char *data = "hello world";
@@ -132,7 +190,7 @@ int main() {
         compress_args.input_file = test_input;
         compress_args.output_file = NULL;  // Use default output
         
-        int comp_result = run_compression(compress_args);
+        int comp_result = invoke_run_compression(compress_args);
         if (comp_result != 0) {
             fprintf(stderr, "Error: run_compression failed, code: %d\n", comp_result);
             remove(test_input);
@@ -148,7 +206,7 @@ int main() {
         decomp_args.input_file = test_compressed;
         decomp_args.output_file = test_output;
         
-        int result = run_decompression(decomp_args);
+        int result = invoke_run_decompression(decomp_args);
         if (result != 0) {
             fprintf(stderr, "Error: run_decompression failed, code: %d\n", result);
             remove(test_input);
@@ -209,7 +267,7 @@ int main() {
         compress_args.input_file = test_input;
         compress_args.output_file = NULL;
         
-        int comp_result = run_compression(compress_args);
+        int comp_result = invoke_run_compression(compress_args);
         if (comp_result != 0) {
             fprintf(stderr, "Error: run_compression failed, code: %d\n", comp_result);
             remove(test_input);
@@ -228,7 +286,7 @@ int main() {
         decomp_args.input_file = test_compressed;
         decomp_args.output_file = NULL;  // Use stored original filename
         
-        int result = run_decompression(decomp_args);
+        int result = invoke_run_decompression(decomp_args);
         if (result != 0) {
             fprintf(stderr, "Error: run_decompression with default output failed, code: %d\n", result);
             remove(test_compressed);
@@ -274,7 +332,7 @@ int main() {
         decomp_args.input_file = "non_existent_file_12345.huff";
         decomp_args.output_file = "output.txt";
         
-        int result = run_decompression(decomp_args);
+        int result = invoke_run_decompression(decomp_args);
         if (result == 0) {
             fprintf(stderr, "Error: run_decompression should fail for non-existent file\n");
             return 1;
@@ -516,7 +574,7 @@ int main() {
         decomp_args.input_file = (char *)corrupted_file;
         decomp_args.output_file = "output_corrupted.txt";
         
-        int result = run_decompression(decomp_args);
+        int result = invoke_run_decompression(decomp_args);
         assert(result != 0);  // Should fail
         
         remove(corrupted_file);
@@ -548,7 +606,7 @@ int main() {
         compress_args.input_file = large_input;
         compress_args.output_file = large_compressed;
         
-        int comp_result = run_compression(compress_args);
+        int comp_result = invoke_run_compression(compress_args);
         assert(comp_result == 0);
         
         // Decompress
@@ -560,7 +618,7 @@ int main() {
         decomp_args.input_file = large_compressed;
         decomp_args.output_file = large_output;
         
-        int decomp_result = run_decompression(decomp_args);
+        int decomp_result = invoke_run_decompression(decomp_args);
         assert(decomp_result == 0);
         
         // Verify content matches
