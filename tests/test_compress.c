@@ -20,6 +20,7 @@ static int remove_directory_recursive(const char *path) {
         return unlink(path);
     }
 
+    int result = 0;
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
@@ -32,14 +33,17 @@ static int remove_directory_recursive(const char *path) {
         struct stat st;
         if (stat(full_path, &st) == 0) {
             if (S_ISDIR(st.st_mode)) {
-                remove_directory_recursive(full_path);
+                int ret = remove_directory_recursive(full_path);
+                if (ret != 0) result = ret;
             } else {
-                unlink(full_path);
+                int ret = unlink(full_path);
+                if (ret != 0) result = ret;
             }
         }
     }
     closedir(dir);
-    return rmdir(path);
+    int ret = rmdir(path);
+    return (result != 0) ? result : ret;
 }
 
 static void free_cache(char **cache) {
