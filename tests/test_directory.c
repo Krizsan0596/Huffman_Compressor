@@ -63,6 +63,48 @@ static void free_directory_items(Directory_item *items, int count) {
     free(items);
 }
 
+static long serialize_archive_to_buffer(Directory_item *archive, int archive_size, char **buffer) {
+    if (archive_size == 0) return EMPTY_DIRECTORY;
+
+    FILE *stream = tmpfile();
+    if (stream == NULL) return FILE_WRITE_ERROR;
+
+    if (fwrite(&archive_size, sizeof(int), 1, stream) != 1) {
+        fclose(stream);
+        return FILE_WRITE_ERROR;
+    }
+
+    for (int i = 0; i < archive_size; i++) {
+        long written = serialize_archive(&archive[i], stream);
+        if (written < 0) {
+            fclose(stream);
+            return written;
+        }
+    }
+
+    long file_size = ftell(stream);
+    if (file_size < 0 || fseek(stream, 0, SEEK_SET) != 0) {
+        fclose(stream);
+        return FILE_WRITE_ERROR;
+    }
+
+    *buffer = malloc(file_size);
+    if (*buffer == NULL) {
+        fclose(stream);
+        return MALLOC_ERROR;
+    }
+
+    size_t read_bytes = fread(*buffer, 1, file_size, stream);
+    fclose(stream);
+    if (read_bytes != (size_t)file_size) {
+        free(*buffer);
+        *buffer = NULL;
+        return FILE_WRITE_ERROR;
+    }
+
+    return file_size;
+}
+
 // Function to recursively compare two directories
 int compare_directories(const char *path1, const char *path2) {
     DIR *dir1 = opendir(path1);
@@ -224,7 +266,7 @@ int main() {
 
     // 2. Serialize the archive
     char *buffer = NULL;
-    long buffer_size = serialize_archive(archive, archive_size, &buffer);
+    long buffer_size = serialize_archive_to_buffer(archive, archive_size, &buffer);
     if (buffer_size < 0) {
         fprintf(stderr, "Error: Serialization failed with code %ld\n", buffer_size);
         free(archive);
@@ -857,7 +899,7 @@ int main() {
         
         // Serialize the archive
         char *perm_buffer = NULL;
-        long perm_buffer_size = serialize_archive(perm_archive, perm_archive_size, &perm_buffer);
+        long perm_buffer_size = serialize_archive_to_buffer(perm_archive, perm_archive_size, &perm_buffer);
         if (perm_buffer_size < 0) {
             fprintf(stderr, "Error: Serialization failed with code %ld\n", perm_buffer_size);
             for (int i = 0; i < perm_archive_size; i++) {
@@ -1049,7 +1091,7 @@ int main() {
         assert(deep_size > 0);
         
         char *deep_buffer = NULL;
-        long deep_buffer_size = serialize_archive(deep_archive, deep_archive_size, &deep_buffer);
+        long deep_buffer_size = serialize_archive_to_buffer(deep_archive, deep_archive_size, &deep_buffer);
         assert(deep_buffer_size > 0);
         
         Directory_item *deep_deserialized = NULL;
@@ -1104,7 +1146,7 @@ int main() {
         assert(many_size > 0);
         
         char *many_buffer = NULL;
-        long many_buffer_size = serialize_archive(many_archive, many_archive_size, &many_buffer);
+        long many_buffer_size = serialize_archive_to_buffer(many_archive, many_archive_size, &many_buffer);
         assert(many_buffer_size > 0);
         
         Directory_item *many_deserialized = NULL;
@@ -1166,7 +1208,7 @@ int main() {
         assert(special_size > 0);
         
         char *special_buffer = NULL;
-        long special_buffer_size = serialize_archive(special_archive, special_archive_size, &special_buffer);
+        long special_buffer_size = serialize_archive_to_buffer(special_archive, special_archive_size, &special_buffer);
         assert(special_buffer_size > 0);
         
         Directory_item *special_deserialized = NULL;
@@ -1222,7 +1264,7 @@ int main() {
         assert(large_size > 0);
         
         char *large_buffer = NULL;
-        long large_buffer_size = serialize_archive(large_archive, large_archive_size, &large_buffer);
+        long large_buffer_size = serialize_archive_to_buffer(large_archive, large_archive_size, &large_buffer);
         assert(large_buffer_size > 0);
         
         Directory_item *large_deserialized = NULL;
@@ -1276,7 +1318,7 @@ int main() {
         assert(empty_size >= 0);
         
         char *empty_buffer = NULL;
-        long empty_buffer_size = serialize_archive(empty_archive, empty_archive_size, &empty_buffer);
+        long empty_buffer_size = serialize_archive_to_buffer(empty_archive, empty_archive_size, &empty_buffer);
         assert(empty_buffer_size > 0);
         
         Directory_item *empty_deserialized = NULL;
@@ -1333,7 +1375,7 @@ int main() {
         assert(binary_size > 0);
         
         char *binary_buffer = NULL;
-        long binary_buffer_size = serialize_archive(binary_archive, binary_archive_size, &binary_buffer);
+        long binary_buffer_size = serialize_archive_to_buffer(binary_archive, binary_archive_size, &binary_buffer);
         assert(binary_buffer_size > 0);
         
         Directory_item *binary_deserialized = NULL;
