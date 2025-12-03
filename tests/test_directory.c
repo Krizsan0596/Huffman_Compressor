@@ -194,7 +194,7 @@ int main() {
         perror("chdir() error");
         return 1;
     }
-    if (extract_directory(".", deserialized_archive, deserialized_size, true) != 0) {
+    if (extract_directory(".", deserialized_archive, deserialized_size, true, false) != 0) {
         if (chdir(original_cwd) != 0) {
             perror("chdir() error");
         }
@@ -411,7 +411,7 @@ int main() {
             return 1;
         }
         
-        if (extract_directory(".", prep_archive, prep_archive_size, true) != 0) {
+        if (extract_directory(".", prep_archive, prep_archive_size, true, false) != 0) {
             if (chdir(original_cwd) != 0) {
                 perror("chdir error");
             }
@@ -596,7 +596,7 @@ int main() {
         system(command);
         
         // Use restore_directory to extract
-        result = restore_directory(data, restore_output_dir, true);
+        result = restore_directory(data, restore_output_dir, true, false);
         if (result != 0) {
             fprintf(stderr, "Error: restore_directory failed, code: %d\n", result);
             free(data);
@@ -644,7 +644,7 @@ int main() {
         system(command);
         
         // Use restore_directory with NULL output
-        result = restore_directory(data, NULL, true);
+        result = restore_directory(data, NULL, true, false);
         if (result != 0) {
             fprintf(stderr, "Error: restore_directory with NULL output failed, code: %d\n", result);
             free(data);
@@ -684,7 +684,7 @@ int main() {
         system(command);
         
         // First extraction
-        result = restore_directory(data, restore_output_dir, true);
+        result = restore_directory(data, restore_output_dir, true, false);
         if (result != 0) {
             fprintf(stderr, "Error: first restore_directory failed, code: %d\n", result);
             free(data);
@@ -692,7 +692,7 @@ int main() {
         }
         
         // Second extraction with force flag (should overwrite)
-        result = restore_directory(data, restore_output_dir, true);
+        result = restore_directory(data, restore_output_dir, true, false);
         if (result != 0) {
             fprintf(stderr, "Error: second restore_directory with force failed, code: %d\n", result);
             free(data);
@@ -864,7 +864,7 @@ int main() {
         system(command);
         mkdir(perm_output_dir, 0755);
         
-        if (extract_directory(perm_output_dir, perm_deserialized, perm_deser_size, true) != 0) {
+        if (extract_directory(perm_output_dir, perm_deserialized, perm_deser_size, true, false) != 0) {
             fprintf(stderr, "Error: Extraction failed\n");
             free(perm_buffer);
             for (int i = 0; i < perm_archive_size; i++) {

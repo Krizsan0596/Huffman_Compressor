@@ -5,7 +5,6 @@
 
 /*
  * A magic az a tomoritett fajlban szereplo azonosito.
- * A fajl beolvasasanal ezt ellenorizzuk.
  */
 static const char magic[4] = {'H', 'U', 'F', 'F'};
 
@@ -87,6 +86,7 @@ typedef struct {
     bool extract_mode;
     bool force;
     bool directory;
+    bool no_preserve_perms;
     char *input_file;
     char *output_file;
 } Arguments;

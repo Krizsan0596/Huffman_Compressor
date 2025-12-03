@@ -22,12 +22,13 @@ static void print_usage(const char *prog_name) {
         "Hasznalat: %s -c|-x [-o KIMENETI_FAJL] BEMENETI_FAJL\n"
         "\n"
         "Opciok:\n"
-        "\t-c                Tomorites\n"
-        "\t-x                Kitomorites\n"
-        "\t-o KIMENETI_FAJL  Kimeneti fajl megadasa (opcionalis).\n"
-        "\t-h                Kiirja ezt az utmutatot.\n"
-        "\t-f                Ha letezik a KIMENETI_FAJL, kerdes nelkul felulirja.\n"
-        "\t-r                Rekurzivan egy megadott mappat tomorit (csak tomoriteskor szukseges).\n"
+        "\t-c                        Tomorites\n"
+        "\t-x                        Kitomorites\n"
+        "\t-o KIMENETI_FAJL          Kimeneti fajl megadasa (opcionalis).\n"
+        "\t-h                        Kiirja ezt az utmutatot.\n"
+        "\t-f                        Ha letezik a KIMENETI_FAJL, kerdes nelkul felulirja.\n"
+        "\t-r                        Rekurzivan egy megadott mappat tomorit (csak tomoriteskor szukseges).\n"
+        "\t-P, --no-preserve-perms   Kitomoriteskor a tarolt jogosultsagokat alkalmazza a letrehozott mappakra is.\n"
         "\tBEMENETI_FAJL: A tomoritendo vagy visszaallitando fajl utvonala.\n"
         "\tA -c es -x kapcsolok kizarjak egymast.";
 
@@ -43,40 +44,48 @@ int parse_arguments(int argc, char* argv[], Arguments *args) {
     args->extract_mode = false;
     args->force = false;
     args->directory = false;
+    args->no_preserve_perms = false;
     args->input_file = NULL;
     args->output_file = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] == '-') {
-            switch (argv[i][1]) {
-                case 'h':
-                    print_usage(argv[0]);
-                    return HELP_REQUESTED;
-                case 'c':
-                    args->compress_mode = true;
-                    break;
-                case 'x':
-                    args->extract_mode = true;
-                    break;
-                case 'f':
-                    args->force = true;
-                    break;
-                case 'r':
-                    args->directory = true;
-                    break;
-                case 'o':
-                    if (++i < argc) {
-                        args->output_file = argv[i];
-                    } else {
-                        printf("Az -o kapcsolo utan add meg a kimeneti fajlt.\n");
+            if (strcmp(argv[i], "--no-preserve-perms") == 0) {
+                args->no_preserve_perms = true;
+            } else {
+                switch (argv[i][1]) {
+                    case 'h':
+                        print_usage(argv[0]);
+                        return HELP_REQUESTED;
+                    case 'c':
+                        args->compress_mode = true;
+                        break;
+                    case 'x':
+                        args->extract_mode = true;
+                        break;
+                    case 'f':
+                        args->force = true;
+                        break;
+                    case 'r':
+                        args->directory = true;
+                        break;
+                    case 'P':
+                        args->no_preserve_perms = true;
+                        break;
+                    case 'o':
+                        if (++i < argc) {
+                            args->output_file = argv[i];
+                        } else {
+                            printf("Az -o kapcsolo utan add meg a kimeneti fajlt.\n");
+                            print_usage(argv[0]);
+                            return EINVAL;
+                        }
+                        break;
+                    default:
+                        printf("Ismeretlen kapcsolo: %s\n", argv[i]);
                         print_usage(argv[0]);
                         return EINVAL;
-                    }
-                    break;
-                default:
-                    printf("Ismeretlen kapcsolo: %s\n", argv[i]);
-                    print_usage(argv[0]);
-                    return EINVAL;
+                }
             }
         } else {
             if (args->input_file == NULL) {
