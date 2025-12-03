@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <assert.h>
 #include "../lib/directory.h"
 #include "../lib/data_types.h"
 #include "../lib/debugmalloc.h"
@@ -968,6 +969,473 @@ int main() {
     system(command);
     
     printf("All directory permissions tests passed!\n");
+
+    // ==========================================
+    // EDGE CASE TESTS
+    // ==========================================
+    printf("Testing edge cases...\n");
+    
+    // Edge case 1: Deep nested directory structure
+    printf("  Edge case 1: Deep nested directory...\n");
+    {
+        char *deep_test_dir = "../tests/deep_test_dir";
+        char *deep_output_dir = "deep_output_dir";
+        
+        mkdir("../tests", 0755);
+        mkdir(deep_test_dir, 0755);
+        
+        // Create 10 levels deep
+        char path[1024];
+        strcpy(path, deep_test_dir);
+        for (int i = 0; i < 10; i++) {
+            snprintf(path + strlen(path), sizeof(path) - strlen(path), "/level%d", i);
+            mkdir(path, 0755);
+        }
+        
+        // Create file at deepest level
+        char file_path[1024];
+        snprintf(file_path, sizeof(file_path), "%s/deepfile.txt", path);
+        FILE *df = fopen(file_path, "w");
+        if (df) {
+            fprintf(df, "Deep file content.\n");
+            fclose(df);
+        }
+        
+        // Archive, serialize, deserialize, extract
+        Directory_item *deep_archive = NULL;
+        int deep_archive_size = 0;
+        int deep_current_index = 0;
+        
+        char deep_cwd[1024];
+        getcwd(deep_cwd, sizeof(deep_cwd));
+        chdir(deep_test_dir);
+        long deep_size = archive_directory(".", &deep_archive, &deep_current_index, &deep_archive_size);
+        chdir(deep_cwd);
+        assert(deep_size > 0);
+        
+        char *deep_buffer = NULL;
+        long deep_buffer_size = serialize_archive(deep_archive, deep_archive_size, &deep_buffer);
+        assert(deep_buffer_size > 0);
+        
+        Directory_item *deep_deserialized = NULL;
+        int deep_deser_size = deserialize_archive(&deep_deserialized, deep_buffer);
+        assert(deep_deser_size > 0);
+        
+        snprintf(command, sizeof(command), "rm -rf %s", deep_output_dir);
+        system(command);
+        mkdir(deep_output_dir, 0755);
+        
+        assert(extract_directory(deep_output_dir, deep_deserialized, deep_deser_size, true, false) == 0);
+        assert(compare_directories(deep_test_dir, deep_output_dir) == 0);
+        
+        // Cleanup
+        free(deep_buffer);
+        for (int i = 0; i < deep_archive_size; i++) {
+            if (deep_archive[i].is_dir) {
+                free(deep_archive[i].dir_path);
+            } else {
+                free(deep_archive[i].file_path);
+                free(deep_archive[i].file_data);
+            }
+        }
+        free(deep_archive);
+        for (int i = 0; i < deep_deser_size; i++) {
+            if (deep_deserialized[i].is_dir) {
+                free(deep_deserialized[i].dir_path);
+            } else {
+                free(deep_deserialized[i].file_path);
+                free(deep_deserialized[i].file_data);
+            }
+        }
+        free(deep_deserialized);
+        snprintf(command, sizeof(command), "rm -rf %s", deep_test_dir);
+        system(command);
+        snprintf(command, sizeof(command), "rm -rf %s", deep_output_dir);
+        system(command);
+        
+        printf("    Deep nested directory test passed.\n");
+    }
+    
+    // Edge case 2: Directory with many files
+    printf("  Edge case 2: Directory with many files...\n");
+    {
+        char *many_test_dir = "../tests/many_files_dir";
+        char *many_output_dir = "many_files_output";
+        
+        mkdir("../tests", 0755);
+        mkdir(many_test_dir, 0755);
+        
+        // Create 100 files
+        for (int i = 0; i < 100; i++) {
+            char file_path[1024];
+            snprintf(file_path, sizeof(file_path), "%s/file%03d.txt", many_test_dir, i);
+            FILE *mf = fopen(file_path, "w");
+            if (mf) {
+                fprintf(mf, "Content of file %d\n", i);
+                fclose(mf);
+            }
+        }
+        
+        Directory_item *many_archive = NULL;
+        int many_archive_size = 0;
+        int many_current_index = 0;
+        
+        char many_cwd[1024];
+        getcwd(many_cwd, sizeof(many_cwd));
+        chdir(many_test_dir);
+        long many_size = archive_directory(".", &many_archive, &many_current_index, &many_archive_size);
+        chdir(many_cwd);
+        assert(many_size > 0);
+        
+        char *many_buffer = NULL;
+        long many_buffer_size = serialize_archive(many_archive, many_archive_size, &many_buffer);
+        assert(many_buffer_size > 0);
+        
+        Directory_item *many_deserialized = NULL;
+        int many_deser_size = deserialize_archive(&many_deserialized, many_buffer);
+        assert(many_deser_size > 0);
+        
+        snprintf(command, sizeof(command), "rm -rf %s", many_output_dir);
+        system(command);
+        mkdir(many_output_dir, 0755);
+        
+        assert(extract_directory(many_output_dir, many_deserialized, many_deser_size, true, false) == 0);
+        assert(compare_directories(many_test_dir, many_output_dir) == 0);
+        
+        // Cleanup
+        free(many_buffer);
+        for (int i = 0; i < many_archive_size; i++) {
+            if (many_archive[i].is_dir) {
+                free(many_archive[i].dir_path);
+            } else {
+                free(many_archive[i].file_path);
+                free(many_archive[i].file_data);
+            }
+        }
+        free(many_archive);
+        for (int i = 0; i < many_deser_size; i++) {
+            if (many_deserialized[i].is_dir) {
+                free(many_deserialized[i].dir_path);
+            } else {
+                free(many_deserialized[i].file_path);
+                free(many_deserialized[i].file_data);
+            }
+        }
+        free(many_deserialized);
+        snprintf(command, sizeof(command), "rm -rf %s", many_test_dir);
+        system(command);
+        snprintf(command, sizeof(command), "rm -rf %s", many_output_dir);
+        system(command);
+        
+        printf("    Directory with many files test passed.\n");
+    }
+    
+    // Edge case 3: Files with special characters in names
+    printf("  Edge case 3: Files with special characters...\n");
+    {
+        char *special_test_dir = "../tests/special_chars_dir";
+        char *special_output_dir = "special_chars_output";
+        
+        mkdir("../tests", 0755);
+        mkdir(special_test_dir, 0755);
+        
+        // Create files with special characters (safe ones)
+        char *special_names[] = {
+            "file-with-dashes.txt",
+            "file_with_underscores.txt",
+            "file.with.dots.txt",
+            "file123numbers.txt"
+        };
+        
+        for (int i = 0; i < 4; i++) {
+            char file_path[1024];
+            snprintf(file_path, sizeof(file_path), "%s/%s", special_test_dir, special_names[i]);
+            FILE *sf = fopen(file_path, "w");
+            if (sf) {
+                fprintf(sf, "Special file %d\n", i);
+                fclose(sf);
+            }
+        }
+        
+        Directory_item *special_archive = NULL;
+        int special_archive_size = 0;
+        int special_current_index = 0;
+        
+        char special_cwd[1024];
+        getcwd(special_cwd, sizeof(special_cwd));
+        chdir(special_test_dir);
+        long special_size = archive_directory(".", &special_archive, &special_current_index, &special_archive_size);
+        chdir(special_cwd);
+        assert(special_size > 0);
+        
+        char *special_buffer = NULL;
+        long special_buffer_size = serialize_archive(special_archive, special_archive_size, &special_buffer);
+        assert(special_buffer_size > 0);
+        
+        Directory_item *special_deserialized = NULL;
+        int special_deser_size = deserialize_archive(&special_deserialized, special_buffer);
+        assert(special_deser_size > 0);
+        
+        snprintf(command, sizeof(command), "rm -rf %s", special_output_dir);
+        system(command);
+        mkdir(special_output_dir, 0755);
+        
+        assert(extract_directory(special_output_dir, special_deserialized, special_deser_size, true, false) == 0);
+        assert(compare_directories(special_test_dir, special_output_dir) == 0);
+        
+        // Cleanup
+        free(special_buffer);
+        for (int i = 0; i < special_archive_size; i++) {
+            if (special_archive[i].is_dir) {
+                free(special_archive[i].dir_path);
+            } else {
+                free(special_archive[i].file_path);
+                free(special_archive[i].file_data);
+            }
+        }
+        free(special_archive);
+        for (int i = 0; i < special_deser_size; i++) {
+            if (special_deserialized[i].is_dir) {
+                free(special_deserialized[i].dir_path);
+            } else {
+                free(special_deserialized[i].file_path);
+                free(special_deserialized[i].file_data);
+            }
+        }
+        free(special_deserialized);
+        snprintf(command, sizeof(command), "rm -rf %s", special_test_dir);
+        system(command);
+        snprintf(command, sizeof(command), "rm -rf %s", special_output_dir);
+        system(command);
+        
+        printf("    Files with special characters test passed.\n");
+    }
+    
+    // Edge case 4: Large files in directory
+    printf("  Edge case 4: Large files in directory...\n");
+    {
+        char *large_test_dir = "../tests/large_files_dir";
+        char *large_output_dir = "large_files_output";
+        
+        mkdir("../tests", 0755);
+        mkdir(large_test_dir, 0755);
+        
+        // Create one large file
+        char large_file[1024];
+        snprintf(large_file, sizeof(large_file), "%s/largefile.txt", large_test_dir);
+        FILE *lf = fopen(large_file, "w");
+        if (lf) {
+            debugmalloc_max_block_size(10 * 1024 * 1024);  // 10MB
+            for (int i = 0; i < 10000; i++) {
+                fprintf(lf, "This is line %d of the large file with some content.\n", i);
+            }
+            fclose(lf);
+        }
+        
+        Directory_item *large_archive = NULL;
+        int large_archive_size = 0;
+        int large_current_index = 0;
+        
+        char large_cwd[1024];
+        getcwd(large_cwd, sizeof(large_cwd));
+        chdir(large_test_dir);
+        long large_size = archive_directory(".", &large_archive, &large_current_index, &large_archive_size);
+        chdir(large_cwd);
+        assert(large_size > 0);
+        
+        char *large_buffer = NULL;
+        long large_buffer_size = serialize_archive(large_archive, large_archive_size, &large_buffer);
+        assert(large_buffer_size > 0);
+        
+        Directory_item *large_deserialized = NULL;
+        int large_deser_size = deserialize_archive(&large_deserialized, large_buffer);
+        assert(large_deser_size > 0);
+        
+        snprintf(command, sizeof(command), "rm -rf %s", large_output_dir);
+        system(command);
+        mkdir(large_output_dir, 0755);
+        
+        assert(extract_directory(large_output_dir, large_deserialized, large_deser_size, true, false) == 0);
+        assert(compare_directories(large_test_dir, large_output_dir) == 0);
+        
+        // Cleanup
+        free(large_buffer);
+        for (int i = 0; i < large_archive_size; i++) {
+            if (large_archive[i].is_dir) {
+                free(large_archive[i].dir_path);
+            } else {
+                free(large_archive[i].file_path);
+                free(large_archive[i].file_data);
+            }
+        }
+        free(large_archive);
+        for (int i = 0; i < large_deser_size; i++) {
+            if (large_deserialized[i].is_dir) {
+                free(large_deserialized[i].dir_path);
+            } else {
+                free(large_deserialized[i].file_path);
+                free(large_deserialized[i].file_data);
+            }
+        }
+        free(large_deserialized);
+        snprintf(command, sizeof(command), "rm -rf %s", large_test_dir);
+        system(command);
+        snprintf(command, sizeof(command), "rm -rf %s", large_output_dir);
+        system(command);
+        
+        printf("    Large files in directory test passed.\n");
+    }
+    
+    // Edge case 5: Empty files in directory
+    printf("  Edge case 5: Empty files in directory...\n");
+    {
+        char *empty_test_dir = "../tests/empty_files_dir";
+        char *empty_output_dir = "empty_files_output";
+        
+        mkdir("../tests", 0755);
+        mkdir(empty_test_dir, 0755);
+        
+        // Create empty files
+        for (int i = 0; i < 5; i++) {
+            char file_path[1024];
+            snprintf(file_path, sizeof(file_path), "%s/empty%d.txt", empty_test_dir, i);
+            FILE *ef = fopen(file_path, "w");
+            if (ef) {
+                fclose(ef);
+            }
+        }
+        
+        Directory_item *empty_archive = NULL;
+        int empty_archive_size = 0;
+        int empty_current_index = 0;
+        
+        char empty_cwd[1024];
+        getcwd(empty_cwd, sizeof(empty_cwd));
+        chdir(empty_test_dir);
+        long empty_size = archive_directory(".", &empty_archive, &empty_current_index, &empty_archive_size);
+        chdir(empty_cwd);
+        assert(empty_size >= 0);
+        
+        char *empty_buffer = NULL;
+        long empty_buffer_size = serialize_archive(empty_archive, empty_archive_size, &empty_buffer);
+        assert(empty_buffer_size > 0);
+        
+        Directory_item *empty_deserialized = NULL;
+        int empty_deser_size = deserialize_archive(&empty_deserialized, empty_buffer);
+        assert(empty_deser_size > 0);
+        
+        snprintf(command, sizeof(command), "rm -rf %s", empty_output_dir);
+        system(command);
+        mkdir(empty_output_dir, 0755);
+        
+        assert(extract_directory(empty_output_dir, empty_deserialized, empty_deser_size, true, false) == 0);
+        assert(compare_directories(empty_test_dir, empty_output_dir) == 0);
+        
+        // Cleanup
+        free(empty_buffer);
+        for (int i = 0; i < empty_archive_size; i++) {
+            if (empty_archive[i].is_dir) {
+                free(empty_archive[i].dir_path);
+            } else {
+                free(empty_archive[i].file_path);
+                free(empty_archive[i].file_data);
+            }
+        }
+        free(empty_archive);
+        for (int i = 0; i < empty_deser_size; i++) {
+            if (empty_deserialized[i].is_dir) {
+                free(empty_deserialized[i].dir_path);
+            } else {
+                free(empty_deserialized[i].file_path);
+                free(empty_deserialized[i].file_data);
+            }
+        }
+        free(empty_deserialized);
+        snprintf(command, sizeof(command), "rm -rf %s", empty_test_dir);
+        system(command);
+        snprintf(command, sizeof(command), "rm -rf %s", empty_output_dir);
+        system(command);
+        
+        printf("    Empty files in directory test passed.\n");
+    }
+    
+    // Edge case 6: Binary files in directory
+    printf("  Edge case 6: Binary files in directory...\n");
+    {
+        char *binary_test_dir = "../tests/binary_files_dir";
+        char *binary_output_dir = "binary_files_output";
+        
+        mkdir("../tests", 0755);
+        mkdir(binary_test_dir, 0755);
+        
+        // Create binary file
+        char binary_file[1024];
+        snprintf(binary_file, sizeof(binary_file), "%s/binary.dat", binary_test_dir);
+        FILE *bf = fopen(binary_file, "wb");
+        if (bf) {
+            unsigned char data[256];
+            for (int i = 0; i < 256; i++) {
+                data[i] = (unsigned char)i;
+            }
+            fwrite(data, 1, 256, bf);
+            fclose(bf);
+        }
+        
+        Directory_item *binary_archive = NULL;
+        int binary_archive_size = 0;
+        int binary_current_index = 0;
+        
+        char binary_cwd[1024];
+        getcwd(binary_cwd, sizeof(binary_cwd));
+        chdir(binary_test_dir);
+        long binary_size = archive_directory(".", &binary_archive, &binary_current_index, &binary_archive_size);
+        chdir(binary_cwd);
+        assert(binary_size > 0);
+        
+        char *binary_buffer = NULL;
+        long binary_buffer_size = serialize_archive(binary_archive, binary_archive_size, &binary_buffer);
+        assert(binary_buffer_size > 0);
+        
+        Directory_item *binary_deserialized = NULL;
+        int binary_deser_size = deserialize_archive(&binary_deserialized, binary_buffer);
+        assert(binary_deser_size > 0);
+        
+        snprintf(command, sizeof(command), "rm -rf %s", binary_output_dir);
+        system(command);
+        mkdir(binary_output_dir, 0755);
+        
+        assert(extract_directory(binary_output_dir, binary_deserialized, binary_deser_size, true, false) == 0);
+        assert(compare_directories(binary_test_dir, binary_output_dir) == 0);
+        
+        // Cleanup
+        free(binary_buffer);
+        for (int i = 0; i < binary_archive_size; i++) {
+            if (binary_archive[i].is_dir) {
+                free(binary_archive[i].dir_path);
+            } else {
+                free(binary_archive[i].file_path);
+                free(binary_archive[i].file_data);
+            }
+        }
+        free(binary_archive);
+        for (int i = 0; i < binary_deser_size; i++) {
+            if (binary_deserialized[i].is_dir) {
+                free(binary_deserialized[i].dir_path);
+            } else {
+                free(binary_deserialized[i].file_path);
+                free(binary_deserialized[i].file_data);
+            }
+        }
+        free(binary_deserialized);
+        snprintf(command, sizeof(command), "rm -rf %s", binary_test_dir);
+        system(command);
+        snprintf(command, sizeof(command), "rm -rf %s", binary_output_dir);
+        system(command);
+        
+        printf("    Binary files in directory test passed.\n");
+    }
+    
+    printf("All edge case tests passed!\n");
 
     return 0;
 }
