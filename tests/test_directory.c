@@ -713,5 +713,261 @@ int main() {
     
     printf("All restore_directory tests passed!\n");
 
+    // ==========================================
+    // Test directory permissions preservation
+    // ==========================================
+    printf("Testing directory permissions preservation...\n");
+    
+    // Create test directories with specific non-default permissions
+    char *perm_test_dir = "../tests/perm_test_dir";
+    char *perm_output_dir = "perm_output_dir";
+    
+    // Create test directory structure with non-default permissions
+    mkdir("../tests", 0755);
+    mkdir("../tests/perm_test_dir", 0755);
+    mkdir("../tests/perm_test_dir/subdir_700", 0700);  // Owner only (rwx------)
+    mkdir("../tests/perm_test_dir/subdir_750", 0750);  // Owner + group read (rwxr-x---)
+    mkdir("../tests/perm_test_dir/subdir_755", 0755);  // Standard permissions (rwxr-xr-x)
+    
+    // Create test files in the directories
+    FILE *perm_f1 = fopen("../tests/perm_test_dir/file1.txt", "w");
+    if (perm_f1) {
+        fprintf(perm_f1, "File in root directory.\n");
+        fclose(perm_f1);
+    }
+    FILE *perm_f2 = fopen("../tests/perm_test_dir/subdir_700/file2.txt", "w");
+    if (perm_f2) {
+        fprintf(perm_f2, "File in subdir_700.\n");
+        fclose(perm_f2);
+    }
+    FILE *perm_f3 = fopen("../tests/perm_test_dir/subdir_750/file3.txt", "w");
+    if (perm_f3) {
+        fprintf(perm_f3, "File in subdir_750.\n");
+        fclose(perm_f3);
+    }
+    FILE *perm_f4 = fopen("../tests/perm_test_dir/subdir_755/file4.txt", "w");
+    if (perm_f4) {
+        fprintf(perm_f4, "File in subdir_755.\n");
+        fclose(perm_f4);
+    }
+    
+    // Get original permissions using stat()
+    struct stat perm_st_700, perm_st_750, perm_st_755;
+    int perm_700_mode = 0, perm_750_mode = 0, perm_755_mode = 0;
+    
+    if (stat("../tests/perm_test_dir/subdir_700", &perm_st_700) == 0) {
+        perm_700_mode = perm_st_700.st_mode & 0777;
+    } else {
+        fprintf(stderr, "Error: Could not stat subdir_700\n");
+        return 1;
+    }
+    if (stat("../tests/perm_test_dir/subdir_750", &perm_st_750) == 0) {
+        perm_750_mode = perm_st_750.st_mode & 0777;
+    } else {
+        fprintf(stderr, "Error: Could not stat subdir_750\n");
+        return 1;
+    }
+    if (stat("../tests/perm_test_dir/subdir_755", &perm_st_755) == 0) {
+        perm_755_mode = perm_st_755.st_mode & 0777;
+    } else {
+        fprintf(stderr, "Error: Could not stat subdir_755\n");
+        return 1;
+    }
+    
+    printf("  Original permissions: subdir_700=%04o, subdir_750=%04o, subdir_755=%04o\n", 
+           perm_700_mode, perm_750_mode, perm_755_mode);
+    
+    // Test: Archive, serialize, deserialize, and extract with permissions verification
+    printf("  Test: Full round-trip preserving directory permissions...\n");
+    {
+        // Archive the directory
+        Directory_item *perm_archive = NULL;
+        int perm_archive_size = 0;
+        int perm_current_index = 0;
+        
+        char perm_saved_cwd[1024];
+        if (getcwd(perm_saved_cwd, sizeof(perm_saved_cwd)) == NULL) {
+            perror("getcwd error");
+            return 1;
+        }
+        
+        if (chdir(perm_test_dir) != 0) {
+            perror("chdir error");
+            return 1;
+        }
+        
+        long perm_dir_size = archive_directory(".", &perm_archive, &perm_current_index, &perm_archive_size);
+        
+        if (chdir(perm_saved_cwd) != 0) {
+            perror("chdir error");
+            return 1;
+        }
+        
+        if (perm_dir_size < 0) {
+            fprintf(stderr, "Error: Archiving failed with code %ld\n", perm_dir_size);
+            return 1;
+        }
+        
+        // Verify permissions were captured in archive
+        for (int i = 0; i < perm_archive_size; i++) {
+            if (perm_archive[i].is_dir) {
+                printf("    Archived dir: %s with perms=%04o\n", 
+                       perm_archive[i].dir_path, perm_archive[i].perms);
+            }
+        }
+        
+        // Serialize the archive
+        char *perm_buffer = NULL;
+        long perm_buffer_size = serialize_archive(perm_archive, perm_archive_size, &perm_buffer);
+        if (perm_buffer_size < 0) {
+            fprintf(stderr, "Error: Serialization failed with code %ld\n", perm_buffer_size);
+            for (int i = 0; i < perm_archive_size; i++) {
+                if (perm_archive[i].is_dir) {
+                    free(perm_archive[i].dir_path);
+                } else {
+                    free(perm_archive[i].file_path);
+                    free(perm_archive[i].file_data);
+                }
+            }
+            free(perm_archive);
+            return 1;
+        }
+        
+        // Deserialize the archive
+        Directory_item *perm_deserialized = NULL;
+        int perm_deser_size = deserialize_archive(&perm_deserialized, perm_buffer);
+        if (perm_deser_size < 0) {
+            fprintf(stderr, "Error: Deserialization failed with code %d\n", perm_deser_size);
+            free(perm_buffer);
+            for (int i = 0; i < perm_archive_size; i++) {
+                if (perm_archive[i].is_dir) {
+                    free(perm_archive[i].dir_path);
+                } else {
+                    free(perm_archive[i].file_path);
+                    free(perm_archive[i].file_data);
+                }
+            }
+            free(perm_archive);
+            return 1;
+        }
+        
+        // Verify permissions were preserved after deserialization
+        for (int i = 0; i < perm_deser_size; i++) {
+            if (perm_deserialized[i].is_dir) {
+                printf("    Deserialized dir: %s with perms=%04o\n", 
+                       perm_deserialized[i].dir_path, perm_deserialized[i].perms);
+            }
+        }
+        
+        // Extract the directory
+        snprintf(command, sizeof(command), "rm -rf %s", perm_output_dir);
+        system(command);
+        mkdir(perm_output_dir, 0755);
+        
+        if (extract_directory(perm_output_dir, perm_deserialized, perm_deser_size, true) != 0) {
+            fprintf(stderr, "Error: Extraction failed\n");
+            free(perm_buffer);
+            for (int i = 0; i < perm_archive_size; i++) {
+                if (perm_archive[i].is_dir) {
+                    free(perm_archive[i].dir_path);
+                } else {
+                    free(perm_archive[i].file_path);
+                    free(perm_archive[i].file_data);
+                }
+            }
+            free(perm_archive);
+            for (int i = 0; i < perm_deser_size; i++) {
+                if (perm_deserialized[i].is_dir) {
+                    free(perm_deserialized[i].dir_path);
+                } else {
+                    free(perm_deserialized[i].file_path);
+                    free(perm_deserialized[i].file_data);
+                }
+            }
+            free(perm_deserialized);
+            return 1;
+        }
+        
+        // Verify extracted directory permissions using stat()
+        struct stat ext_st_700, ext_st_750, ext_st_755;
+        int ext_700_mode = 0, ext_750_mode = 0, ext_755_mode = 0;
+        
+        char ext_700_path[256], ext_750_path[256], ext_755_path[256];
+        snprintf(ext_700_path, sizeof(ext_700_path), "%s/./subdir_700", perm_output_dir);
+        snprintf(ext_750_path, sizeof(ext_750_path), "%s/./subdir_750", perm_output_dir);
+        snprintf(ext_755_path, sizeof(ext_755_path), "%s/./subdir_755", perm_output_dir);
+        
+        if (stat(ext_700_path, &ext_st_700) == 0) {
+            ext_700_mode = ext_st_700.st_mode & 0777;
+        } else {
+            fprintf(stderr, "Error: Could not stat extracted subdir_700\n");
+            return 1;
+        }
+        if (stat(ext_750_path, &ext_st_750) == 0) {
+            ext_750_mode = ext_st_750.st_mode & 0777;
+        } else {
+            fprintf(stderr, "Error: Could not stat extracted subdir_750\n");
+            return 1;
+        }
+        if (stat(ext_755_path, &ext_st_755) == 0) {
+            ext_755_mode = ext_st_755.st_mode & 0777;
+        } else {
+            fprintf(stderr, "Error: Could not stat extracted subdir_755\n");
+            return 1;
+        }
+        
+        printf("  Extracted permissions: subdir_700=%04o, subdir_750=%04o, subdir_755=%04o\n", 
+               ext_700_mode, ext_750_mode, ext_755_mode);
+        
+        // Compare permissions
+        if (perm_700_mode != ext_700_mode) {
+            fprintf(stderr, "Error: subdir_700 permissions mismatch! Original: %04o, Extracted: %04o\n",
+                    perm_700_mode, ext_700_mode);
+            return 1;
+        }
+        if (perm_750_mode != ext_750_mode) {
+            fprintf(stderr, "Error: subdir_750 permissions mismatch! Original: %04o, Extracted: %04o\n",
+                    perm_750_mode, ext_750_mode);
+            return 1;
+        }
+        if (perm_755_mode != ext_755_mode) {
+            fprintf(stderr, "Error: subdir_755 permissions mismatch! Original: %04o, Extracted: %04o\n",
+                    perm_755_mode, ext_755_mode);
+            return 1;
+        }
+        
+        printf("    All directory permissions preserved correctly!\n");
+        
+        // Cleanup
+        free(perm_buffer);
+        for (int i = 0; i < perm_archive_size; i++) {
+            if (perm_archive[i].is_dir) {
+                free(perm_archive[i].dir_path);
+            } else {
+                free(perm_archive[i].file_path);
+                free(perm_archive[i].file_data);
+            }
+        }
+        free(perm_archive);
+        for (int i = 0; i < perm_deser_size; i++) {
+            if (perm_deserialized[i].is_dir) {
+                free(perm_deserialized[i].dir_path);
+            } else {
+                free(perm_deserialized[i].file_path);
+                free(perm_deserialized[i].file_data);
+            }
+        }
+        free(perm_deserialized);
+        
+        snprintf(command, sizeof(command), "rm -rf %s", perm_output_dir);
+        system(command);
+    }
+    
+    // Cleanup test directory
+    snprintf(command, sizeof(command), "rm -rf %s", perm_test_dir);
+    system(command);
+    
+    printf("All directory permissions tests passed!\n");
+
     return 0;
 }
