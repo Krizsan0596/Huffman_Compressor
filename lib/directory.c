@@ -16,16 +16,15 @@
  * Rekurzivan bejarja a mappat es fajlonkent egy tombbe menti az adatokat.
  * Siker eseten a mappa meretet adja vissza bajtokban, hiba eseten negativ kodot.
  */
-long archive_directory(char *path, Directory_item **archive, int *current_index, int *archive_size) {
+long archive_directory(char *path, FILE *stream, int *archive_size) {
     DIR *directory = NULL;
     long dir_size = 0;
     long result = 0;
     char *newpath = NULL;
-    Directory_item current_item = {0};
-    
+
     while (true) {
         /* Az elso hivaskor felvesszuk a gyoker mappat az archivumba, hogy a relativ utak megmaradjanak. */
-        if (*current_index == 0) {
+        if (*archive_size == 0) {
             struct stat root_st;
             if (stat(path, &root_st) != 0) {
                 result = DIRECTORY_ERROR;
@@ -39,33 +38,26 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
                 result = MALLOC_ERROR;
                 break;
             }
-            Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
-            if (temp != NULL) *archive = temp;
-            else {
-                result = MALLOC_ERROR;
-                current_item = root;
+            long written = serialize_archive(&root, stream);
+            free(root.dir_path);
+            if (written < 0) {
+                result = written;
                 break;
             }
             (*archive_size)++;
-            (*archive)[(*current_index)++] = root;
         }
 
         directory = opendir(path);
         if (directory == NULL) {
-            if (*current_index == 1) {
-                current_item = (*archive)[0];
-                (*archive_size)--;
-                (*current_index)--;
-            }
             result = DIRECTORY_OPEN_ERROR;
             break;
         }
-        
+
         while (true) {
             struct dirent *dir = readdir(directory);
             if (dir == NULL) break;
             else if (strcmp(dir->d_name, ".") == 0 || strcmp(dir->d_name, "..") == 0) continue;
-            
+
             newpath = malloc(strlen(path) + strlen(dir->d_name) + 2);
             if (newpath == NULL) {
                 result = MALLOC_ERROR;
@@ -89,32 +81,28 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
                 subdir.perms = st.st_mode & 0777;
                 if (subdir.dir_path == NULL) {
                     result = MALLOC_ERROR;
-                    current_item = subdir;
                     break;
                 }
-                Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
-                if (temp != NULL) *archive = temp;
-                else {
-                    result = MALLOC_ERROR;
-                    current_item = subdir;
+                long written = serialize_archive(&subdir, stream);
+                free(subdir.dir_path);
+                if (written < 0) {
+                    result = written;
                     break;
                 }
                 (*archive_size)++;
-                (*archive)[(*current_index)++] = subdir;
-                long subdir_size = archive_directory(newpath, archive, current_index, archive_size);
+                long subdir_size = archive_directory(newpath, stream, archive_size);
                 if (subdir_size < 0) {
                     result = subdir_size;
                     break;
                 }
                 dir_size += subdir_size;
-            } 
+            }
             else if (S_ISREG(st.st_mode)) {
                 Directory_item file = {0};
                 file.is_dir = false;
                 file.file_path = strdup(newpath);
                 if (file.file_path == NULL) {
                     result = MALLOC_ERROR;
-                    current_item = file;
                     break;
                 }
                 file.file_size = read_raw(newpath, &file.file_data);
@@ -125,39 +113,32 @@ long archive_directory(char *path, Directory_item **archive, int *current_index,
                         file.file_data = NULL;
                     } else {
                         result = FILE_READ_ERROR;
-                        current_item = file;
+                        free(file.file_path);
+                        free(file.file_data);
                         break;
                     }
                 }
                 dir_size += file.file_size;
-                Directory_item *temp = realloc(*archive, (*archive_size + 1) * sizeof(Directory_item));
-                if (temp != NULL) *archive = temp;
-                else {
-                    result = MALLOC_ERROR;
-                    current_item = file;
+
+                long written = serialize_archive(&file, stream);
+                free(file.file_path);
+                free(file.file_data);
+                if (written < 0) {
+                    result = written;
                     break;
                 }
 
                 (*archive_size)++;
-                (*archive)[(*current_index)++] = file;
             }
             free(newpath);
             newpath = NULL;
         }
-        
+
         if (result < 0) break;
         result = dir_size;
         break;
     }
-    
-    if (result < 0) {
-        if (current_item.is_dir) {
-            free(current_item.dir_path);
-        } else {
-            free(current_item.file_path);
-            free(current_item.file_data);
-        }
-    }
+
     free(newpath);
     if (directory != NULL) closedir(directory);
     return result;
@@ -314,7 +295,6 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
     char *sep = strrchr(input_file, '/');
     char *parent_dir = NULL;
     char *file_name = NULL;
-    Directory_item *archive = NULL;
     int archive_size = 0;
     int current_index = 0;
     int data_len = 0;
@@ -355,9 +335,24 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
                 data_len = DIRECTORY_ERROR;
                 break;
             }
+            changed_dir = true;
         }
         
-        *directory_size = archive_directory((file_name != NULL) ? file_name : input_file, &archive, &current_index, &archive_size);
+        stream = tmpfile();
+        if (stream == NULL) {
+            printf("Nem sikerult letrehozni az ideiglenes fajlt a szerializalashoz.\n");
+            data_len = FILE_WRITE_ERROR;
+            break;
+        }
+
+        archive_size = 0;
+        if (fwrite(&archive_size, sizeof(int), 1, stream) != 1) {
+            printf("Nem sikerult a mappa szerializalasa.\n");
+            data_len = FILE_WRITE_ERROR;
+            break;
+        }
+
+        *directory_size = archive_directory((file_name != NULL) ? file_name : input_file, stream, &archive_size);
         if (*directory_size < 0) {
             if (*directory_size == MALLOC_ERROR) {
                 printf("Nem sikerult lefoglalni a memoriat a mappa archivallasakor.\n");
@@ -369,15 +364,9 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
                 printf("Nem sikerult a mappa archivallasa.\n");
             }
             data_len = *directory_size;
-            /* Visszalepunk az eredeti mappaba hibaeseten is. */
-            if (sep != NULL) {
-                if (chdir(current_path) != 0) {
-                    printf("Nem sikerult kilepni a mappabol.\n");
-                    data_len = DIRECTORY_ERROR;
-                }
-            }
             break;
         }
+<<<<<<< Updated upstream
         
         if (archive_size == 0) {
             printf("A mappa ures.\n");
@@ -456,7 +445,51 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
                 }
                 break;
             }
+=======
+
+        if (archive_size == 0) {
+            printf("A mappa ures.\n");
+            data_len = EMPTY_DIRECTORY;
+            break;
         }
+
+        long file_size = ftell(stream);
+        if (file_size < 0) {
+            printf("Nem sikerult a mappa szerializalasa.\n");
+            data_len = FILE_WRITE_ERROR;
+            break;
+>>>>>>> Stashed changes
+        }
+
+        if (fseek(stream, 0, SEEK_SET) != 0 || fwrite(&archive_size, sizeof(int), 1, stream) != 1) {
+            printf("Nem sikerult a mappa szerializalasa.\n");
+            data_len = FILE_WRITE_ERROR;
+            break;
+        }
+
+        if (fseek(stream, 0, SEEK_SET) != 0) {
+            printf("Nem sikerult a mappa szerializalasa.\n");
+            data_len = FILE_WRITE_ERROR;
+            break;
+        }
+
+        *data = malloc(file_size);
+        if (*data == NULL) {
+            printf("Nem sikerult lefoglalni a memoriat a szerializalaskor.\n");
+            data_len = MALLOC_ERROR;
+            break;
+        }
+
+        size_t read_bytes = fread(*data, 1, file_size, stream);
+        if (read_bytes != (size_t)file_size) {
+            printf("Nem sikerult a mappa szerializalasa.\n");
+            free(*data);
+            *data = NULL;
+            data_len = FILE_WRITE_ERROR;
+            break;
+        }
+
+        data_len = file_size;
         break;
     }
 
@@ -464,6 +497,7 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
         fclose(stream);
     }
 
+<<<<<<< Updated upstream
     if (archive_size > 0) {
         for (int i = 0; i < archive_size; ++i) {
             if (archive[i].is_dir) {
@@ -471,10 +505,18 @@ int prepare_directory(char *input_file, char **data, int *directory_size) {
             } else {
                 free(archive[i].file_path);
                 free(archive[i].file_data);
+=======
+    if (changed_dir) {
+        if (chdir(current_path) != 0) {
+            printf("Nem sikerult kilepni a mappabol.\n");
+            if (data_len >= 0) data_len = DIRECTORY_ERROR;
+            if (data_len == DIRECTORY_ERROR && *data != NULL) {
+                free(*data);
+                *data = NULL;
+>>>>>>> Stashed changes
             }
         }
     }
-    free(archive);
     free(parent_dir);
     free(file_name);
     
