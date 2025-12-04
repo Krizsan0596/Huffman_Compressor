@@ -63,27 +63,30 @@ static void free_directory_items(Directory_item *items, int count) {
     free(items);
 }
 
-static long serialize_archive_to_buffer(Directory_item *archive, int archive_size, char **buffer) {
-    if (archive_size == 0) return EMPTY_DIRECTORY;
+static long serialize_archive_to_buffer(char *path, char **buffer, int *archive_size, long *dir_size_out) {
+    *archive_size = 0;
 
     FILE *stream = tmpfile();
     if (stream == NULL) return FILE_WRITE_ERROR;
 
-    if (fwrite(&archive_size, sizeof(int), 1, stream) != 1) {
+    if (fwrite(archive_size, sizeof(int), 1, stream) != 1) {
         fclose(stream);
         return FILE_WRITE_ERROR;
     }
 
-    for (int i = 0; i < archive_size; i++) {
-        long written = serialize_archive(&archive[i], stream);
-        if (written < 0) {
-            fclose(stream);
-            return written;
-        }
+    long dir_size = archive_directory(path, stream, archive_size);
+    if (dir_size < 0) {
+        fclose(stream);
+        return dir_size;
     }
 
     long file_size = ftell(stream);
-    if (file_size < 0 || fseek(stream, 0, SEEK_SET) != 0) {
+    if (file_size < 0) {
+        fclose(stream);
+        return FILE_WRITE_ERROR;
+    }
+
+    if (fseek(stream, 0, SEEK_SET) != 0 || fwrite(archive_size, sizeof(int), 1, stream) != 1 || fseek(stream, 0, SEEK_SET) != 0) {
         fclose(stream);
         return FILE_WRITE_ERROR;
     }
@@ -100,6 +103,10 @@ static long serialize_archive_to_buffer(Directory_item *archive, int archive_siz
         free(*buffer);
         *buffer = NULL;
         return FILE_WRITE_ERROR;
+    }
+
+    if (dir_size_out != NULL) {
+        *dir_size_out = dir_size;
     }
 
     return file_size;
@@ -237,9 +244,8 @@ int main() {
     mkdir(output_dir, 0755);
 
     // 1. Archive the directory
-    Directory_item *archive = NULL;
     int archive_size = 0;
-    int current_index = 0;
+    long dir_size = 0;
 
     char original_cwd[1024];
     if (getcwd(original_cwd, sizeof(original_cwd)) == NULL) {
@@ -252,24 +258,16 @@ int main() {
         return 1;
     }
 
-    long dir_size = archive_directory(".", &archive, &current_index, &archive_size);
+    char *buffer = NULL;
+    long buffer_size = serialize_archive_to_buffer(".", &buffer, &archive_size, &dir_size);
 
     if (chdir(original_cwd) != 0) {
         perror("chdir() error");
         return 1;
     }
 
-    if (dir_size < 0) {
-        fprintf(stderr, "Error: Archiving failed with code %ld\n", dir_size);
-        return 1;
-    }
-
-    // 2. Serialize the archive
-    char *buffer = NULL;
-    long buffer_size = serialize_archive_to_buffer(archive, archive_size, &buffer);
     if (buffer_size < 0) {
         fprintf(stderr, "Error: Serialization failed with code %ld\n", buffer_size);
-        free(archive);
         return 1;
     }
 
@@ -279,7 +277,6 @@ int main() {
     if (deserialized_size < 0) {
         fprintf(stderr, "Error: Deserialization failed with code %d\n", deserialized_size);
         free(buffer);
-        free(archive);
         return 1;
     }
 
@@ -294,7 +291,6 @@ int main() {
         }
         fprintf(stderr, "Error: Extraction failed\n");
         free(buffer);
-        free(archive);
         free(deserialized_archive);
         return 1;
     }
@@ -308,7 +304,6 @@ int main() {
         fprintf(stderr, "Error: Directories do not match!\n");
         // Cleanup
         free(buffer);
-        free(archive);
         free(deserialized_archive);
         return 1;
     }
@@ -316,18 +311,6 @@ int main() {
 
     // 6. Cleanup
     free(buffer);
-    for (int i = 0; i < archive_size; i++) {
-        if (archive[i].is_dir) {
-            free(archive[i].dir_path);
-        }
-    }
-    for (int i = 0; i < archive_size; i++) {
-        if (!archive[i].is_dir) {
-            free(archive[i].file_path);
-            free(archive[i].file_data);
-        }
-    }
-    free(archive);
     for (int i = 0; i < deserialized_size; i++) {
         if (deserialized_archive[i].is_dir) {
             free(deserialized_archive[i].dir_path);
@@ -861,11 +844,9 @@ int main() {
     // Test: Archive, serialize, deserialize, and extract with permissions verification
     printf("  Test: Full round-trip preserving directory permissions...\n");
     {
-        // Archive the directory
-        Directory_item *perm_archive = NULL;
         int perm_archive_size = 0;
-        int perm_current_index = 0;
-        
+        long perm_dir_size = 0;
+
         char perm_saved_cwd[1024];
         if (getcwd(perm_saved_cwd, sizeof(perm_saved_cwd)) == NULL) {
             perror("getcwd error");
@@ -876,41 +857,17 @@ int main() {
             perror("chdir error");
             return 1;
         }
-        
-        long perm_dir_size = archive_directory(".", &perm_archive, &perm_current_index, &perm_archive_size);
-        
+
+        char *perm_buffer = NULL;
+        long perm_buffer_size = serialize_archive_to_buffer(".", &perm_buffer, &perm_archive_size, &perm_dir_size);
+
         if (chdir(perm_saved_cwd) != 0) {
             perror("chdir error");
             return 1;
         }
-        
-        if (perm_dir_size < 0) {
-            fprintf(stderr, "Error: Archiving failed with code %ld\n", perm_dir_size);
-            return 1;
-        }
-        
-        // Verify permissions were captured in archive
-        for (int i = 0; i < perm_archive_size; i++) {
-            if (perm_archive[i].is_dir) {
-                printf("    Archived dir: %s with perms=%04o\n", 
-                       perm_archive[i].dir_path, perm_archive[i].perms);
-            }
-        }
-        
-        // Serialize the archive
-        char *perm_buffer = NULL;
-        long perm_buffer_size = serialize_archive_to_buffer(perm_archive, perm_archive_size, &perm_buffer);
+
         if (perm_buffer_size < 0) {
             fprintf(stderr, "Error: Serialization failed with code %ld\n", perm_buffer_size);
-            for (int i = 0; i < perm_archive_size; i++) {
-                if (perm_archive[i].is_dir) {
-                    free(perm_archive[i].dir_path);
-                } else {
-                    free(perm_archive[i].file_path);
-                    free(perm_archive[i].file_data);
-                }
-            }
-            free(perm_archive);
             return 1;
         }
         
@@ -920,15 +877,6 @@ int main() {
         if (perm_deser_size < 0) {
             fprintf(stderr, "Error: Deserialization failed with code %d\n", perm_deser_size);
             free(perm_buffer);
-            for (int i = 0; i < perm_archive_size; i++) {
-                if (perm_archive[i].is_dir) {
-                    free(perm_archive[i].dir_path);
-                } else {
-                    free(perm_archive[i].file_path);
-                    free(perm_archive[i].file_data);
-                }
-            }
-            free(perm_archive);
             return 1;
         }
         
@@ -947,15 +895,6 @@ int main() {
         if (extract_directory(perm_output_dir, perm_deserialized, perm_deser_size, true, false) != 0) {
             fprintf(stderr, "Error: Extraction failed\n");
             free(perm_buffer);
-            for (int i = 0; i < perm_archive_size; i++) {
-                if (perm_archive[i].is_dir) {
-                    free(perm_archive[i].dir_path);
-                } else {
-                    free(perm_archive[i].file_path);
-                    free(perm_archive[i].file_data);
-                }
-            }
-            free(perm_archive);
             for (int i = 0; i < perm_deser_size; i++) {
                 if (perm_deserialized[i].is_dir) {
                     free(perm_deserialized[i].dir_path);
@@ -1017,18 +956,9 @@ int main() {
         }
         
         printf("    All directory permissions preserved correctly!\n");
-        
+
         // Cleanup
         free(perm_buffer);
-        for (int i = 0; i < perm_archive_size; i++) {
-            if (perm_archive[i].is_dir) {
-                free(perm_archive[i].dir_path);
-            } else {
-                free(perm_archive[i].file_path);
-                free(perm_archive[i].file_data);
-            }
-        }
-        free(perm_archive);
         for (int i = 0; i < perm_deser_size; i++) {
             if (perm_deserialized[i].is_dir) {
                 free(perm_deserialized[i].dir_path);
@@ -1079,19 +1009,15 @@ int main() {
         }
         
         // Archive, serialize, deserialize, extract
-        Directory_item *deep_archive = NULL;
         int deep_archive_size = 0;
-        int deep_current_index = 0;
-        
+        long deep_dir_size = 0;
+
         char deep_cwd[1024];
         getcwd(deep_cwd, sizeof(deep_cwd));
         chdir(deep_test_dir);
-        long deep_size = archive_directory(".", &deep_archive, &deep_current_index, &deep_archive_size);
-        chdir(deep_cwd);
-        assert(deep_size > 0);
-        
         char *deep_buffer = NULL;
-        long deep_buffer_size = serialize_archive_to_buffer(deep_archive, deep_archive_size, &deep_buffer);
+        long deep_buffer_size = serialize_archive_to_buffer(".", &deep_buffer, &deep_archive_size, &deep_dir_size);
+        chdir(deep_cwd);
         assert(deep_buffer_size > 0);
         
         Directory_item *deep_deserialized = NULL;
@@ -1106,7 +1032,6 @@ int main() {
         
         // Cleanup
         free(deep_buffer);
-        free_directory_items(deep_archive, deep_archive_size);
         free_directory_items(deep_deserialized, deep_deser_size);
         remove_directory_recursive(deep_test_dir);
         remove_directory_recursive(deep_output_dir);
@@ -1134,19 +1059,15 @@ int main() {
             }
         }
         
-        Directory_item *many_archive = NULL;
         int many_archive_size = 0;
-        int many_current_index = 0;
-        
+        long many_dir_size = 0;
+
         char many_cwd[1024];
         getcwd(many_cwd, sizeof(many_cwd));
         chdir(many_test_dir);
-        long many_size = archive_directory(".", &many_archive, &many_current_index, &many_archive_size);
-        chdir(many_cwd);
-        assert(many_size > 0);
-        
         char *many_buffer = NULL;
-        long many_buffer_size = serialize_archive_to_buffer(many_archive, many_archive_size, &many_buffer);
+        long many_buffer_size = serialize_archive_to_buffer(".", &many_buffer, &many_archive_size, &many_dir_size);
+        chdir(many_cwd);
         assert(many_buffer_size > 0);
         
         Directory_item *many_deserialized = NULL;
@@ -1161,7 +1082,6 @@ int main() {
         
         // Cleanup
         free(many_buffer);
-        free_directory_items(many_archive, many_archive_size);
         free_directory_items(many_deserialized, many_deser_size);
         remove_directory_recursive(many_test_dir);
         remove_directory_recursive(many_output_dir);
@@ -1196,19 +1116,15 @@ int main() {
             }
         }
         
-        Directory_item *special_archive = NULL;
         int special_archive_size = 0;
-        int special_current_index = 0;
-        
+        long special_dir_size = 0;
+
         char special_cwd[1024];
         getcwd(special_cwd, sizeof(special_cwd));
         chdir(special_test_dir);
-        long special_size = archive_directory(".", &special_archive, &special_current_index, &special_archive_size);
-        chdir(special_cwd);
-        assert(special_size > 0);
-        
         char *special_buffer = NULL;
-        long special_buffer_size = serialize_archive_to_buffer(special_archive, special_archive_size, &special_buffer);
+        long special_buffer_size = serialize_archive_to_buffer(".", &special_buffer, &special_archive_size, &special_dir_size);
+        chdir(special_cwd);
         assert(special_buffer_size > 0);
         
         Directory_item *special_deserialized = NULL;
@@ -1223,7 +1139,6 @@ int main() {
         
         // Cleanup
         free(special_buffer);
-        free_directory_items(special_archive, special_archive_size);
         free_directory_items(special_deserialized, special_deser_size);
         remove_directory_recursive(special_test_dir);
         remove_directory_recursive(special_output_dir);
@@ -1252,19 +1167,15 @@ int main() {
             fclose(lf);
         }
         
-        Directory_item *large_archive = NULL;
         int large_archive_size = 0;
-        int large_current_index = 0;
-        
+        long large_dir_size = 0;
+
         char large_cwd[1024];
         getcwd(large_cwd, sizeof(large_cwd));
         chdir(large_test_dir);
-        long large_size = archive_directory(".", &large_archive, &large_current_index, &large_archive_size);
-        chdir(large_cwd);
-        assert(large_size > 0);
-        
         char *large_buffer = NULL;
-        long large_buffer_size = serialize_archive_to_buffer(large_archive, large_archive_size, &large_buffer);
+        long large_buffer_size = serialize_archive_to_buffer(".", &large_buffer, &large_archive_size, &large_dir_size);
+        chdir(large_cwd);
         assert(large_buffer_size > 0);
         
         Directory_item *large_deserialized = NULL;
@@ -1279,7 +1190,6 @@ int main() {
         
         // Cleanup
         free(large_buffer);
-        free_directory_items(large_archive, large_archive_size);
         free_directory_items(large_deserialized, large_deser_size);
         remove_directory_recursive(large_test_dir);
         remove_directory_recursive(large_output_dir);
@@ -1306,19 +1216,15 @@ int main() {
             }
         }
         
-        Directory_item *empty_archive = NULL;
         int empty_archive_size = 0;
-        int empty_current_index = 0;
-        
+        long empty_dir_size = 0;
+
         char empty_cwd[1024];
         getcwd(empty_cwd, sizeof(empty_cwd));
         chdir(empty_test_dir);
-        long empty_size = archive_directory(".", &empty_archive, &empty_current_index, &empty_archive_size);
-        chdir(empty_cwd);
-        assert(empty_size >= 0);
-        
         char *empty_buffer = NULL;
-        long empty_buffer_size = serialize_archive_to_buffer(empty_archive, empty_archive_size, &empty_buffer);
+        long empty_buffer_size = serialize_archive_to_buffer(".", &empty_buffer, &empty_archive_size, &empty_dir_size);
+        chdir(empty_cwd);
         assert(empty_buffer_size > 0);
         
         Directory_item *empty_deserialized = NULL;
@@ -1333,7 +1239,6 @@ int main() {
         
         // Cleanup
         free(empty_buffer);
-        free_directory_items(empty_archive, empty_archive_size);
         free_directory_items(empty_deserialized, empty_deser_size);
         remove_directory_recursive(empty_test_dir);
         remove_directory_recursive(empty_output_dir);
@@ -1363,19 +1268,15 @@ int main() {
             fclose(bf);
         }
         
-        Directory_item *binary_archive = NULL;
         int binary_archive_size = 0;
-        int binary_current_index = 0;
-        
+        long binary_dir_size = 0;
+
         char binary_cwd[1024];
         getcwd(binary_cwd, sizeof(binary_cwd));
         chdir(binary_test_dir);
-        long binary_size = archive_directory(".", &binary_archive, &binary_current_index, &binary_archive_size);
-        chdir(binary_cwd);
-        assert(binary_size > 0);
-        
         char *binary_buffer = NULL;
-        long binary_buffer_size = serialize_archive_to_buffer(binary_archive, binary_archive_size, &binary_buffer);
+        long binary_buffer_size = serialize_archive_to_buffer(".", &binary_buffer, &binary_archive_size, &binary_dir_size);
+        chdir(binary_cwd);
         assert(binary_buffer_size > 0);
         
         Directory_item *binary_deserialized = NULL;
@@ -1390,7 +1291,6 @@ int main() {
         
         // Cleanup
         free(binary_buffer);
-        free_directory_items(binary_archive, binary_archive_size);
         free_directory_items(binary_deserialized, binary_deser_size);
         remove_directory_recursive(binary_test_dir);
         remove_directory_recursive(binary_output_dir);
