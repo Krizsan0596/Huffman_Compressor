@@ -274,16 +274,6 @@ int prepare_directory(char *input_file, int *directory_size) {
             break;
         }
         
-        /* Create temp file in current directory before changing directories */
-        temp_file = fopen(SERIALIZED_TMP_FILE, "wb");
-        if (temp_file == NULL) {
-            printf("Nem sikerult letrehozni a temp fajlt.\n");
-            result = FILE_WRITE_ERROR;
-            break;
-        }
-        fclose(temp_file);
-        temp_file = NULL;
-        
         /* Kulso eleresi ut eseteten athelyezkedunk a szulo mappaba, hogy a tarolt utak relativak maradjanak. */
         if (sep != NULL) {
             if (sep == input_file) {
