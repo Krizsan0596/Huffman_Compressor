@@ -10,3 +10,6 @@ file_io_test
 compress_test
 huffman
 test_compress_decompress
+directory_test
+.serialized.tmp
+*.bak
