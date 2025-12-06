@@ -309,7 +309,7 @@ int prepare_directory(char *input_file, int *directory_size) {
         char temp_file_path[PATH_MAX];
         int path_len = snprintf(temp_file_path, sizeof(temp_file_path), "%s/%s", current_path, SERIALIZED_TMP_FILE);
         if (path_len >= (int)sizeof(temp_file_path)) {
-            printf("Path too long for temp file.\n");
+            printf("A temp fajl eleresi utja tul hosszu.\n");
             result = DIRECTORY_ERROR;
             if (sep != NULL) {
                 if (chdir(current_path) != 0) {
